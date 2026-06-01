@@ -1,0 +1,9 @@
+.git
+.venv
+__pycache__
+chatgpt-export
+models
+runs
+videos
+*.mp4
+*.pt
