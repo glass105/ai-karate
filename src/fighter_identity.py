@@ -26,6 +26,9 @@ class TrackedBox:
     blue_glove_score: float = 0.0
     standing_score: float = 1.0
     reference_match_score: float = 0.0
+    pose_reference_match_score: float = 0.0
+    face_match_score: float = 0.0
+    face_detected: bool = False
 
     @property
     def center_x(self) -> float:
@@ -83,10 +86,14 @@ class FighterIdentity:
         require_standing: bool = False,
         expect_reference_match: bool = False,
         require_reference_match: bool = False,
+        expect_pose_reference_match: bool = False,
+        expect_face_match: bool = False,
+        reject_face_mismatch: bool = False,
         min_red_glove_score: float = 0.20,
         min_white_glove_score: float = 0.02,
         min_standing_score: float = 0.45,
         min_reference_match_score: float = 0.05,
+        min_face_match_score: float = 0.35,
         reset_after_missing_frames: int = 15,
         recovery_confirmation_frames: int = 2,
         fighter_candidate_limit: int = 4,
@@ -117,10 +124,14 @@ class FighterIdentity:
         self.require_standing = require_standing
         self.expect_reference_match = expect_reference_match
         self.require_reference_match = require_reference_match
+        self.expect_pose_reference_match = expect_pose_reference_match
+        self.expect_face_match = expect_face_match
+        self.reject_face_mismatch = reject_face_mismatch
         self.min_red_glove_score = min_red_glove_score
         self.min_white_glove_score = min_white_glove_score
         self.min_standing_score = min_standing_score
         self.min_reference_match_score = min_reference_match_score
+        self.min_face_match_score = min_face_match_score
         self.reset_after_missing_frames = reset_after_missing_frames
         self.recovery_confirmation_frames = recovery_confirmation_frames
         self.fighter_candidate_limit = fighter_candidate_limit
@@ -288,6 +299,10 @@ class FighterIdentity:
             score += (1.0 - box.height / self._foreground_max_height) * 0.10
         if self.expect_reference_match:
             score += (1.0 - box.reference_match_score) * 0.20
+        if self.expect_pose_reference_match:
+            score += (1.0 - box.pose_reference_match_score) * 0.20
+        if self.expect_face_match and box.face_detected:
+            score += (1.0 - box.face_match_score) * 0.35
         if reset_side_x is not None and box.center_x != reset_side_x:
             score += 0.75
         return score
@@ -315,6 +330,11 @@ class FighterIdentity:
             and (
                 not self.require_reference_match
                 or box.reference_match_score >= self.min_reference_match_score
+            )
+            and (
+                not self.reject_face_mismatch
+                or not box.face_detected
+                or box.face_match_score >= self.min_face_match_score
             )
         ]
 

@@ -81,6 +81,38 @@ class FighterIdentityTests(unittest.TestCase):
 
         self.assertEqual(selected, 30)
 
+    def test_pose_reference_match_cue_prefers_visual_match(self) -> None:
+        identity = FighterIdentity("Gabriel", "left", expect_pose_reference_match=True, recovery_confirmation_frames=1)
+        identity.observe([TrackedBox(10, 100, 0, 200, 100, pose_reference_match_score=1.0)])
+
+        selected = identity.observe(
+            [
+                TrackedBox(20, 110, 0, 210, 100, pose_reference_match_score=0.0),
+                TrackedBox(30, 120, 0, 220, 100, pose_reference_match_score=1.0),
+            ]
+        )
+
+        self.assertEqual(selected, 30)
+
+    def test_rejects_visible_face_mismatch_during_recovery(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_face_mismatch=True,
+            min_face_match_score=0.5,
+            recovery_confirmation_frames=1,
+        )
+        identity.observe([TrackedBox(10, 100, 0, 200, 100, face_match_score=1.0, face_detected=True)])
+
+        selected = identity.observe(
+            [
+                TrackedBox(20, 110, 0, 210, 100, face_match_score=0.1, face_detected=True),
+                TrackedBox(30, 120, 0, 220, 100, face_match_score=0.8, face_detected=True),
+            ]
+        )
+
+        self.assertEqual(selected, 30)
+
     def test_requires_reference_match_for_initial_assignment(self) -> None:
         identity = FighterIdentity("Gabriel", "left", require_reference_match=True, min_reference_match_score=0.5)
 

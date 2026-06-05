@@ -19,7 +19,7 @@ from src.analyze_rtmlib_video import (
     parse_roi,
     standing_score,
 )
-from src.fighter_identity import FighterIdentity
+from src.fighter_identity import FighterIdentity, TrackedBox, pose_descriptor
 from src.roi_drawing import candidate_inside_roi, clip_box_to_roi, draw_pose_candidates
 from src.strike_counter import StrikeCounter
 
@@ -49,6 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--fighter-a-require-reference-match", action="store_true")
     parser.add_argument("--fighter-a-min-reference-match-score", default=0.05, type=float)
+    parser.add_argument("--fighter-a-enable-face-match", action="store_true")
+    parser.add_argument("--fighter-a-reject-face-mismatch", action="store_true")
+    parser.add_argument("--fighter-a-min-face-match-score", default=0.35, type=float)
     parser.add_argument("--fighter-a-min-red-glove-score", default=0.20, type=float)
     parser.add_argument("--fighter-a-min-white-glove-score", default=0.02, type=float)
     parser.add_argument("--fighter-a-min-standing-score", default=0.45, type=float)
@@ -119,6 +122,7 @@ def yolo_candidates(result: Any, frame: Any, threshold: float) -> list[dict[str,
                     "box": candidate_box,
                     "center": ((candidate_box[0] + candidate_box[2]) / 2, (candidate_box[1] + candidate_box[3]) / 2),
                     "keypoints": coco_body_keypoints(points),
+                    "identity_keypoints": [[float(x), float(y)] for x, y in points],
                     "draw_keypoints": [[float(x), float(y)] for x, y in points],
                     "draw_scores": [float(score) for score in scores],
                     "red_glove_score": red_score,
@@ -196,6 +200,46 @@ def reference_match_score(
     return max(_cosine_similarity(descriptor, reference) for reference in reference_descriptors)
 
 
+def load_pose_reference_descriptors(
+    estimator: Any,
+    image_paths: list[Path],
+    threshold: float,
+) -> list[tuple[float, ...]]:
+    descriptors = []
+    if estimator is None:
+        return descriptors
+    for path in image_paths:
+        image = cv2.imread(str(path))
+        if image is None:
+            continue
+        points_batch, scores_batch = estimator(image)
+        for points, scores in zip(points_batch, scores_batch):
+            points = np.asarray(points)
+            scores = np.asarray(scores)
+            box = box_for_pose(points, scores, threshold)
+            if box is None:
+                continue
+            descriptor = pose_descriptor(TrackedBox(-1, *box), [[float(x), float(y)] for x, y in points])
+            if descriptor:
+                descriptors.append(descriptor)
+    return descriptors
+
+
+def pose_reference_match_score(
+    candidate: dict[str, Any],
+    reference_descriptors: list[tuple[float, ...]],
+) -> float:
+    if not reference_descriptors:
+        return 0.0
+    descriptor = pose_descriptor(
+        TrackedBox(-1, *candidate["box"]),
+        candidate.get("identity_keypoints", candidate["keypoints"]),
+    )
+    if not descriptor:
+        return 0.0
+    return max(_pose_similarity(descriptor, reference) for reference in reference_descriptors)
+
+
 def _cosine_similarity(first: tuple[float, ...], second: tuple[float, ...]) -> float:
     if not first or len(first) != len(second):
         return 0.0
@@ -205,6 +249,13 @@ def _cosine_similarity(first: tuple[float, ...], second: tuple[float, ...]) -> f
         return 0.0
     similarity = sum(a * b for a, b in zip(first, second)) / (first_norm * second_norm)
     return max(0.0, min(1.0, float(similarity)))
+
+
+def _pose_similarity(first: tuple[float, ...], second: tuple[float, ...]) -> float:
+    if not first or len(first) != len(second):
+        return 0.0
+    distance = sum(abs(a - b) for a, b in zip(first, second)) / len(first)
+    return max(0.0, min(1.0, 1.0 - distance))
 
 
 def rtm_candidates(
@@ -226,6 +277,7 @@ def rtm_candidates(
                 "box": candidate_box,
                 "center": ((candidate_box[0] + candidate_box[2]) / 2, (candidate_box[1] + candidate_box[3]) / 2),
                 "keypoints": coco_body_keypoints(points),
+                "identity_keypoints": [[float(x), float(y)] for x, y in points],
                 "draw_keypoints": [[float(x), float(y)] for x, y in points],
                 "draw_scores": [float(score) for score in scores],
                 "red_glove_score": red_score,
@@ -291,6 +343,13 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     roi = parse_roi(args.arena_roi)
     reference_paths, reference_descriptors = load_reference_descriptors(args.fighter_a_reference_images)
+    face_matcher = None
+    face_reference_count = 0
+    if args.fighter_a_enable_face_match:
+        from src.face_identity import FaceMatcher
+
+        face_matcher = FaceMatcher(args.fighter_a_reference_images)
+        face_reference_count = face_matcher.reference_count
     tracker = build_tracker(args.tracker, args.reid_weights)
     if args.pose_backend in {"yolo", "yolo-rtmw"}:
         from ultralytics import YOLO
@@ -308,6 +367,11 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         )
     else:
         estimator = None
+    pose_reference_descriptors_list = (
+        load_pose_reference_descriptors(estimator, reference_paths, args.keypoint_threshold)
+        if estimator is not None and reference_paths
+        else []
+    )
     capture = cv2.VideoCapture(str(args.input))
     fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
     width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -331,11 +395,15 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         reject_blue_gloves=args.fighter_a_reject_blue_gloves,
         require_standing=args.fighter_a_require_standing,
         expect_reference_match=bool(reference_descriptors),
+        expect_pose_reference_match=bool(pose_reference_descriptors_list),
+        expect_face_match=face_reference_count > 0,
         require_reference_match=args.fighter_a_require_reference_match,
+        reject_face_mismatch=args.fighter_a_reject_face_mismatch and face_reference_count > 0,
         min_red_glove_score=args.fighter_a_min_red_glove_score,
         min_white_glove_score=args.fighter_a_min_white_glove_score,
         min_standing_score=args.fighter_a_min_standing_score,
         min_reference_match_score=args.fighter_a_min_reference_match_score,
+        min_face_match_score=args.fighter_a_min_face_match_score,
         reset_after_missing_frames=args.reset_to_start_side_after_missing,
         recovery_confirmation_frames=args.identity_recovery_confirmation_frames,
         fighter_candidate_limit=args.fighter_candidate_limit,
@@ -349,7 +417,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     fieldnames = [
         "frame", "timestamp_seconds", "track_id", "fighter_label", "confidence",
         "bbox", "keypoints", "red_glove_score", "white_glove_score", "blue_glove_score", "white_uniform_score",
-        "black_belt_score", "standing_score", "reference_match_score", "estimated_action",
+        "black_belt_score", "standing_score", "reference_match_score", "pose_reference_match_score",
+        "face_detected", "face_match_score", "estimated_action",
     ]
     with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
         csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -378,6 +447,17 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     candidate["box"],
                     reference_descriptors,
                 )
+                candidate["pose_reference_match_score"] = pose_reference_match_score(
+                    candidate,
+                    pose_reference_descriptors_list,
+                )
+                if face_matcher is not None:
+                    face_score, face_detected = face_matcher.match_candidate(frame, candidate["box"])
+                    candidate["face_match_score"] = face_score
+                    candidate["face_detected"] = face_detected
+                else:
+                    candidate["face_match_score"] = 0.0
+                    candidate["face_detected"] = False
             tracked = attach_tracks(candidates, tracker.update(detections_array(candidates), frame))
             selected_track_id = identity.observe(identity_box(candidate, frame) for candidate in tracked)
             selected = next(
@@ -413,6 +493,9 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "black_belt_score": round(candidate["black_belt_score"], 4),
                         "standing_score": round(candidate["standing_score"], 4),
                         "reference_match_score": round(candidate.get("reference_match_score", 0.0), 4),
+                        "pose_reference_match_score": round(candidate.get("pose_reference_match_score", 0.0), 4),
+                        "face_detected": candidate.get("face_detected", False),
+                        "face_match_score": round(candidate.get("face_match_score", 0.0), 4),
                         "estimated_action": action,
                     }
                 )
@@ -442,11 +525,16 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "require_standing": args.fighter_a_require_standing,
             "reference_images": [str(path) for path in reference_paths],
             "reference_image_count": len(reference_descriptors),
+            "pose_reference_count": len(pose_reference_descriptors_list),
+            "face_reference_count": face_reference_count,
             "require_reference_match": args.fighter_a_require_reference_match,
+            "face_match": args.fighter_a_enable_face_match,
+            "reject_face_mismatch": args.fighter_a_reject_face_mismatch and face_reference_count > 0,
             "min_red_glove_score": args.fighter_a_min_red_glove_score,
             "min_white_glove_score": args.fighter_a_min_white_glove_score,
             "min_standing_score": args.fighter_a_min_standing_score,
             "min_reference_match_score": args.fighter_a_min_reference_match_score,
+            "min_face_match_score": args.fighter_a_min_face_match_score,
             "reset_to_start_side_after_missing_frames": args.reset_to_start_side_after_missing,
             "recovery_confirmation_frames": args.identity_recovery_confirmation_frames,
             "fighter_candidate_limit": args.fighter_candidate_limit,
