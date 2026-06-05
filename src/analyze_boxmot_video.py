@@ -323,11 +323,16 @@ def rtm_candidates(
     threshold: float,
 ) -> list[dict[str, Any]]:
     points_batch, scores_batch = estimator(frame)
+    source_boxes = getattr(estimator, "boxes", [])
     candidates = []
-    for points, scores in zip(points_batch, scores_batch):
+    for index, (points, scores) in enumerate(zip(points_batch, scores_batch)):
         points = np.asarray(points)
         scores = np.asarray(scores)
-        candidate_box = box_for_pose(points, scores, threshold)
+        candidate_box = (
+            tuple(int(value) for value in source_boxes[index])
+            if index < len(source_boxes)
+            else box_for_pose(points[:17], scores[:17], threshold)
+        )
         if candidate_box is None:
             continue
         red_score, white_glove_score, white_score, black_belt_score, blue_score = color_scores(frame, points, scores, candidate_box)

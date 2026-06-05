@@ -11,6 +11,7 @@ from src.analyze_boxmot_video import (
     detections_array,
     load_reference_descriptors,
     reference_match_score,
+    rtm_candidates,
 )
 
 
@@ -22,6 +23,18 @@ class FakeTracks:
 
 class EmptyTracks:
     size = 0
+
+
+class FakeBoxGuidedEstimator:
+    boxes = [(10, 20, 110, 220)]
+
+    def __call__(self, frame):
+        points = np.zeros((1, 133, 2), dtype=np.float32)
+        scores = np.ones((1, 133), dtype=np.float32)
+        points[0, :17, 0] = np.linspace(20, 100, 17)
+        points[0, :17, 1] = np.linspace(30, 210, 17)
+        points[0, 120] = [500, 500]
+        return points, scores
 
 
 class AnalyzeBoxmotVideoTests(unittest.TestCase):
@@ -116,6 +129,13 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
 
             self.assertGreater(red_score, 0.99)
             self.assertLess(blue_score, 0.1)
+
+    def test_box_guided_rtm_candidates_keep_detector_box(self) -> None:
+        frame = np.full((600, 600, 3), 255, dtype=np.uint8)
+
+        candidates = rtm_candidates(FakeBoxGuidedEstimator(), frame, 0.35)
+
+        self.assertEqual(candidates[0]["box"], (10, 20, 110, 220))
 
 
 if __name__ == "__main__":
