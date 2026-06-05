@@ -125,6 +125,15 @@ def color_scores(
     blue_mask = cv2.inRange(hsv, (90, 80, 60), (135, 255, 255))
     white_mask = cv2.inRange(hsv, (0, 0, 145), (180, 85, 255))
 
+    def mask_score(mask: Any, center_x: int, center_y: int, sample_radius: int) -> float | None:
+        crop = mask[
+            max(0, center_y - sample_radius) : min(height, center_y + sample_radius),
+            max(0, center_x - sample_radius) : min(width, center_x + sample_radius),
+        ]
+        if not crop.size:
+            return None
+        return float(crop.mean() / 255.0)
+
     wrist_values = []
     white_wrist_values = []
     blue_wrist_values = []
@@ -133,25 +142,33 @@ def color_scores(
         if index >= len(points) or scores[index] < 0.2:
             continue
         wrist_x, wrist_y = (int(value) for value in points[index])
-        crop = red_mask[
-            max(0, wrist_y - radius) : min(height, wrist_y + radius),
-            max(0, wrist_x - radius) : min(width, wrist_x + radius),
-        ]
-        if crop.size:
-            wrist_values.append(float(crop.mean() / 255.0))
-        white_crop = white_mask[
-            max(0, wrist_y - radius) : min(height, wrist_y + radius),
-            max(0, wrist_x - radius) : min(width, wrist_x + radius),
-        ]
-        if white_crop.size:
-            white_wrist_values.append(float(white_crop.mean() / 255.0))
-        blue_crop = blue_mask[
-            max(0, wrist_y - radius) : min(height, wrist_y + radius),
-            max(0, wrist_x - radius) : min(width, wrist_x + radius),
-        ]
-        if blue_crop.size:
-            blue_wrist_values.append(float(blue_crop.mean() / 255.0))
-    red_score = sum(wrist_values) / len(wrist_values) if wrist_values else 0.0
+        red_value = mask_score(red_mask, wrist_x, wrist_y, radius)
+        if red_value is not None:
+            wrist_values.append(red_value)
+        white_value = mask_score(white_mask, wrist_x, wrist_y, radius)
+        if white_value is not None:
+            white_wrist_values.append(white_value)
+        blue_value = mask_score(blue_mask, wrist_x, wrist_y, radius)
+        if blue_value is not None:
+            blue_wrist_values.append(blue_value)
+
+    torso_red = red_mask[
+        max(0, int(y1 + box_height * 0.20)) : min(height, int(y1 + box_height * 0.65)),
+        max(0, int(x1 + box_width * 0.20)) : min(width, int(x2 - box_width * 0.20)),
+    ]
+    torso_red_score = float(torso_red.mean() / 255.0) if torso_red.size else 0.0
+    elbow_values = []
+    for index in (7, 8):
+        if index >= len(points) or scores[index] < 0.2:
+            continue
+        elbow_x, elbow_y = (int(value) for value in points[index])
+        elbow_value = mask_score(red_mask, elbow_x, elbow_y, radius)
+        if elbow_value is not None:
+            elbow_values.append(elbow_value)
+    elbow_red_score = sum(elbow_values) / len(elbow_values) if elbow_values else 0.0
+    clothing_red_score = max(torso_red_score, elbow_red_score * 0.80)
+    adjusted_wrist_values = [max(0.0, value - clothing_red_score * 0.75) for value in wrist_values]
+    red_score = sum(adjusted_wrist_values) / len(adjusted_wrist_values) if adjusted_wrist_values else 0.0
     white_glove_score = sum(white_wrist_values) / len(white_wrist_values) if white_wrist_values else 0.0
     blue_score = sum(blue_wrist_values) / len(blue_wrist_values) if blue_wrist_values else 0.0
 
