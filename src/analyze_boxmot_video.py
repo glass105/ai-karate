@@ -24,12 +24,28 @@ from src.roi_drawing import candidate_inside_roi, clip_box_to_roi, draw_pose_can
 from src.strike_counter import StrikeCounter
 
 
+RTMW_POSE_URL = (
+    "https://download.openmmlab.com/mmpose/v1/projects/rtmw/onnx_sdk/"
+    "rtmw-dw-x-l_simcc-cocktail14_270e-384x288_20231122.zip"
+)
+RTMPOSE_BODY_URL = (
+    "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
+    "rtmpose-x_simcc-body7_pt-body7_700e-384x288-71d7b7e9_20230629.zip"
+)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--pose-backend", choices=("yolo", "rtmpose", "rtmw", "yolo-rtmw"), required=True)
     parser.add_argument("--model", default="yolo26l-pose.pt")
+    parser.add_argument(
+        "--rtm-detector-backend",
+        choices=("yolo", "rtmlib"),
+        default="yolo",
+        help="Person detector used before RTM pose inference. yolo keeps RTMW pose but avoids RTMLib YOLOX downloads.",
+    )
     parser.add_argument("--tracker", choices=("ocsort", "deepocsort", "hybridsort", "strongsort", "boosttrack"), required=True)
     parser.add_argument("--reid-weights", default="models/osnet_x0_25_msmt17.pt", type=Path)
     parser.add_argument("--fighter-a-name", default="Gabriel")
@@ -66,6 +82,44 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--confidence", default=0.35, type=float)
     parser.add_argument("--keypoint-threshold", default=0.35, type=float)
     return parser
+
+
+class BoxGuidedRtmPoseEstimator:
+    """Run RTMPose/RTMW on externally supplied person boxes."""
+
+    def __init__(self, pose_model: Any, keypoint_count: int) -> None:
+        self.pose_model = pose_model
+        self.keypoint_count = keypoint_count
+        self.boxes: list[tuple[int, int, int, int]] = []
+
+    def set_boxes(self, boxes: list[tuple[int, int, int, int]]) -> None:
+        self.boxes = boxes
+
+    def __call__(self, image: Any) -> tuple[np.ndarray, np.ndarray]:
+        if not self.boxes:
+            return (
+                np.empty((0, self.keypoint_count, 2), dtype=np.float32),
+                np.empty((0, self.keypoint_count), dtype=np.float32),
+            )
+        return self.pose_model(image, bboxes=[list(box) for box in self.boxes])
+
+
+def build_box_guided_rtm_estimator(pose_backend: str) -> BoxGuidedRtmPoseEstimator:
+    from rtmlib import RTMPose
+
+    if pose_backend == "rtmpose":
+        pose_url = RTMPOSE_BODY_URL
+        keypoint_count = 17
+    else:
+        pose_url = RTMW_POSE_URL
+        keypoint_count = 133
+    pose_model = RTMPose(
+        pose_url,
+        model_input_size=(288, 384),
+        backend="onnxruntime",
+        device="cuda",
+    )
+    return BoxGuidedRtmPoseEstimator(pose_model, keypoint_count)
 
 
 def build_tracker(tracker_name: str, reid_weights: Path) -> Any:
@@ -204,6 +258,8 @@ def load_pose_reference_descriptors(
     estimator: Any,
     image_paths: list[Path],
     threshold: float,
+    detector_model: Any = None,
+    confidence_threshold: float = 0.35,
 ) -> list[tuple[float, ...]]:
     descriptors = []
     if estimator is None:
@@ -212,6 +268,9 @@ def load_pose_reference_descriptors(
         image = cv2.imread(str(path))
         if image is None:
             continue
+        if detector_model is not None and hasattr(estimator, "set_boxes"):
+            result = detector_model.predict(image, conf=confidence_threshold, verbose=False)[0]
+            estimator.set_boxes(yolo_person_boxes(result, confidence_threshold))
         points_batch, scores_batch = estimator(image)
         for points, scores in zip(points_batch, scores_batch):
             points = np.asarray(points)
@@ -351,24 +410,36 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         face_matcher = FaceMatcher(args.fighter_a_reference_images)
         face_reference_count = face_matcher.reference_count
     tracker = build_tracker(args.tracker, args.reid_weights)
-    if args.pose_backend in {"yolo", "yolo-rtmw"}:
+    needs_yolo_detector = args.pose_backend in {"yolo", "yolo-rtmw"} or (
+        args.pose_backend in {"rtmpose", "rtmw"} and args.rtm_detector_backend == "yolo"
+    )
+    if needs_yolo_detector:
         from ultralytics import YOLO
 
         pose_model = YOLO(args.model)
     else:
         pose_model = None
     if args.pose_backend != "yolo":
-        from rtmlib import Body, Wholebody
+        if args.rtm_detector_backend == "yolo" or args.pose_backend == "yolo-rtmw":
+            estimator = build_box_guided_rtm_estimator("rtmw" if args.pose_backend == "yolo-rtmw" else args.pose_backend)
+        else:
+            from rtmlib import Body, Wholebody
 
-        estimator = (
-            Body(mode="performance", backend="onnxruntime", device="cuda")
-            if args.pose_backend == "rtmpose"
-            else Wholebody(mode="performance", backend="onnxruntime", device="cuda")
-        )
+            estimator = (
+                Body(mode="performance", backend="onnxruntime", device="cuda")
+                if args.pose_backend == "rtmpose"
+                else Wholebody(mode="performance", backend="onnxruntime", device="cuda")
+            )
     else:
         estimator = None
     pose_reference_descriptors_list = (
-        load_pose_reference_descriptors(estimator, reference_paths, args.keypoint_threshold)
+        load_pose_reference_descriptors(
+            estimator,
+            reference_paths,
+            args.keypoint_threshold,
+            detector_model=pose_model if hasattr(estimator, "set_boxes") else None,
+            confidence_threshold=args.confidence,
+        )
         if estimator is not None and reference_paths
         else []
     )
@@ -434,8 +505,15 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             elif args.pose_backend == "yolo-rtmw":
                 result = pose_model.predict(frame, conf=args.confidence, verbose=False)[0]
                 yolo_boxes = yolo_person_boxes(result, args.confidence)
+                if hasattr(estimator, "set_boxes"):
+                    estimator.set_boxes(yolo_boxes)
                 candidates = rtm_candidates(estimator, frame, args.keypoint_threshold)
-                candidates = filter_candidates_by_boxes(candidates, yolo_boxes)
+                if not hasattr(estimator, "set_boxes"):
+                    candidates = filter_candidates_by_boxes(candidates, yolo_boxes)
+            elif args.pose_backend in {"rtmpose", "rtmw"} and args.rtm_detector_backend == "yolo":
+                result = pose_model.predict(frame, conf=args.confidence, verbose=False)[0]
+                estimator.set_boxes(yolo_person_boxes(result, args.confidence))
+                candidates = rtm_candidates(estimator, frame, args.keypoint_threshold)
             else:
                 candidates = rtm_candidates(estimator, frame, args.keypoint_threshold)
             candidates = [candidate for candidate in candidates if candidate_inside_roi(candidate, roi, width, height)]
@@ -506,7 +584,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     summary = {
         "input": str(args.input),
         "pose_backend": args.pose_backend,
-        "model": args.model if args.pose_backend == "yolo" else args.pose_backend,
+        "model": args.model if needs_yolo_detector else args.pose_backend,
+        "rtm_detector_backend": args.rtm_detector_backend if args.pose_backend != "yolo" else None,
         "tracker": args.tracker,
         "experiment_label": args.experiment_label,
         "fps": fps,
