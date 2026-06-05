@@ -1,5 +1,9 @@
 param(
-    [switch]$Deploy
+    [switch]$Deploy,
+    [ValidateSet("bytetrack", "botsort")]
+    [string]$TrackerName,
+    [string]$ExperimentName,
+    [string[]]$GpuTypeIds
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,6 +32,35 @@ Import-DotEnv (Join-Path $repoRoot ".env")
 
 if (-not $env:RUNPOD_API_KEY) {
     throw "Set RUNPOD_API_KEY in $repoRoot\.env before deploying."
+}
+
+$tracker = if ($TrackerName) {
+    $TrackerName
+} elseif ($env:RUNPOD_TRACKER) {
+    $env:RUNPOD_TRACKER.ToLowerInvariant()
+} else {
+    "bytetrack"
+}
+
+if ($tracker -notin @("bytetrack", "botsort")) {
+    throw "Set RUNPOD_TRACKER to either bytetrack or botsort."
+}
+
+$storageType = if ($env:RUNPOD_NETWORK_VOLUME_ID) {
+    "persistent"
+} elseif ($env:RUNPOD_ALLOW_EPHEMERAL_VOLUME -eq "true") {
+    "disposable"
+} else {
+    throw @"
+Set RUNPOD_NETWORK_VOLUME_ID in $repoRoot\.env before deploying.
+This automatically reconnects the existing network volume at /workspace.
+For a disposable Pod volume instead, explicitly set RUNPOD_ALLOW_EPHEMERAL_VOLUME=true.
+"@
+}
+
+$podName = "$($env:RUNPOD_POD_NAME)-$storageType-$tracker"
+if ($ExperimentName) {
+    $podName = "$podName-$ExperimentName"
 }
 
 $publicKeyPath = if ($env:RUNPOD_PUBLIC_KEY_FILE) {
@@ -60,11 +93,11 @@ wait "`$start_pid"
 "@
 
 $body = @{
-    name              = $env:RUNPOD_POD_NAME
+    name              = $podName
     imageName         = $env:RUNPOD_IMAGE
     cloudType         = "SECURE"
     computeType       = "GPU"
-    gpuTypeIds        = @($env:RUNPOD_GPU_ID)
+    gpuTypeIds        = @($(if ($GpuTypeIds) { $GpuTypeIds } else { $env:RUNPOD_GPU_ID }))
     gpuCount          = 1
     containerDiskInGb = 40
     volumeInGb        = 50
@@ -91,6 +124,11 @@ if ($env:RUNPOD_NETWORK_VOLUME_ID) {
     $body.networkVolumeId = $env:RUNPOD_NETWORK_VOLUME_ID
 }
 
+if (-not $body.env) {
+    $body.env = @{}
+}
+$body.env.AI_KARATE_TRACKER = "$tracker.yaml"
+
 if (-not $Deploy) {
     Write-Host "Dry run only. Add -Deploy to create a billable Runpod Pod."
     $displayBody = $body | ConvertTo-Json -Depth 6 | ConvertFrom-Json
@@ -115,4 +153,11 @@ $response = Invoke-RestMethod `
     -ContentType "application/json" `
     -Body ($body | ConvertTo-Json -Depth 4)
 
-$response | ConvertTo-Json -Depth 8
+$displayResponse = $response | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+if ($displayResponse.env.PUBLIC_KEY) {
+    $displayResponse.env.PUBLIC_KEY = "<redacted>"
+}
+if ($displayResponse.env.JUPYTER_PASSWORD) {
+    $displayResponse.env.JUPYTER_PASSWORD = "<redacted>"
+}
+$displayResponse | ConvertTo-Json -Depth 8

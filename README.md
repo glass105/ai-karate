@@ -19,7 +19,9 @@ baseline for tuning with real karate footage, not a scoring system.
 fight video
   -> Ultralytics YOLO11 pose
   -> ByteTrack or BoT-SORT
+  -> competition-area filtering
   -> starting-side fighter identity mapping
+  -> position, pose, and appearance-based identity recovery
   -> pose keypoints
   -> punch/kick candidate heuristics
   -> annotated MP4 + CSV + JSON
@@ -66,10 +68,28 @@ python -m src.analyze_video \
   --model yolo11s-pose.pt \
   --tracker bytetrack.yaml \
   --fighter-a-name Gabriel \
-  --fighter-a-start left
+  --fighter-a-start left \
+  --fighter-a-white-uniform \
+  --fighter-a-red-gloves \
+  --reset-to-start-side-after-missing 15 \
+  --arena-roi 0.20,0.10,0.80,0.90
 ```
 
 Switch to `--tracker botsort.yaml` for an identity-retention comparison.
+
+`--arena-roi` is the normalized competition rectangle: `x1,y1,x2,y2`. For
+example, `0.20,0.10,0.80,0.90` keeps the middle 60% of the frame horizontally
+and the 10% to 90% vertical band. Tune it for the camera angle
+so spectators and officials are outside the rectangle. The default
+`0,0,1,1` keeps the full frame.
+
+The analyzer selects Gabriel from the configured starting side, then attempts
+to recover his label when the tracker changes IDs by comparing recent
+position, normalized pose, and a lightweight color histogram. When configured,
+it also checks for red pixels around wrist keypoints, white pixels across the
+torso, and prefers the configured starting side after a gap. Review the
+annotated video before treating recovered identity or strike candidates as
+final.
 
 ## Start On RunPod
 
