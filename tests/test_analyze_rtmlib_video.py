@@ -65,7 +65,7 @@ class AnalyzeRtmlibVideoTests(unittest.TestCase):
         cv2.rectangle(red_shirt, (25, 45), (95, 125), red, -1)
         shirt_score, *_ = color_scores(red_shirt, points, scores, box)
 
-        self.assertGreater(glove_score, 0.20)
+        self.assertGreater(glove_score, 0.50)
         self.assertLess(shirt_score, 0.05)
 
 
