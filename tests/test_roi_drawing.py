@@ -75,6 +75,53 @@ class RoiDrawingTests(unittest.TestCase):
 
         self.assertEqual(frame.sum(), 0)
 
+    def test_draws_wholebody_hand_and_foot_lines_inside_roi(self) -> None:
+        frame = np.zeros((140, 140, 3), dtype=np.uint8)
+        draw_keypoints = [[0, 0] for _ in range(133)]
+        draw_scores = [0.0 for _ in range(133)]
+        for index, point in {
+            17: [30, 110],
+            18: [45, 110],
+            19: [60, 110],
+            91: [30, 30],
+            92: [40, 30],
+            93: [50, 30],
+            94: [60, 30],
+            95: [70, 30],
+            112: [30, 50],
+            113: [40, 50],
+        }.items():
+            draw_keypoints[index] = point
+            draw_scores[index] = 0.9
+        candidate = {
+            "keypoints": [[50, 80] for _ in range(17)],
+            "draw_keypoints": draw_keypoints,
+            "draw_scores": draw_scores,
+        }
+
+        draw_pose_candidates(frame, [candidate], (0.1, 0.1, 0.9, 0.9), score_threshold=0.35)
+
+        self.assertGreater(frame[28:33, 30:71].sum(), 0)
+        self.assertGreater(frame[108:113, 30:61].sum(), 0)
+
+    def test_skips_wholebody_lines_outside_roi(self) -> None:
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        draw_keypoints = [[0, 0] for _ in range(133)]
+        draw_scores = [0.0 for _ in range(133)]
+        draw_keypoints[91] = [50, 50]
+        draw_keypoints[92] = [95, 50]
+        draw_scores[91] = 0.9
+        draw_scores[92] = 0.9
+        candidate = {
+            "keypoints": [],
+            "draw_keypoints": draw_keypoints,
+            "draw_scores": draw_scores,
+        }
+
+        draw_pose_candidates(frame, [candidate], (0.1, 0.1, 0.9, 0.9), score_threshold=0.35)
+
+        self.assertEqual(frame[:, 91:].sum(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

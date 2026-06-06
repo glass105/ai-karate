@@ -21,6 +21,42 @@ COCO_SKELETON = (
     (14, 16),
 )
 
+FOOT_SKELETON = (
+    (15, 17),
+    (17, 18),
+    (18, 19),
+    (16, 20),
+    (20, 21),
+    (21, 22),
+)
+
+HAND_CONNECTIONS = (
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 4),
+    (0, 5),
+    (5, 6),
+    (6, 7),
+    (7, 8),
+    (0, 9),
+    (9, 10),
+    (10, 11),
+    (11, 12),
+    (0, 13),
+    (13, 14),
+    (14, 15),
+    (15, 16),
+    (0, 17),
+    (17, 18),
+    (18, 19),
+    (19, 20),
+)
+
+WHOLEBODY_HAND_SKELETON = tuple((91 + start, 91 + end) for start, end in HAND_CONNECTIONS) + tuple(
+    (112 + start, 112 + end) for start, end in HAND_CONNECTIONS
+)
+
 
 def candidate_inside_roi(
     candidate: dict[str, Any],
@@ -80,11 +116,48 @@ def draw_pose_candidates(
         draw_scores = candidate.get("draw_scores")
         if draw_points is None or draw_scores is None:
             continue
+        _draw_scored_lines(annotated, draw_points, draw_scores, FOOT_SKELETON, roi_box, score_threshold, (0, 180, 255), 1)
+        _draw_scored_lines(
+            annotated,
+            draw_points,
+            draw_scores,
+            WHOLEBODY_HAND_SKELETON,
+            roi_box,
+            score_threshold,
+            (0, 180, 255),
+            1,
+        )
         for point, score in zip(draw_points, draw_scores):
             if score < score_threshold or not _point_inside_roi(point, roi_box):
                 continue
             cv2.circle(annotated, (int(point[0]), int(point[1])), 2, (0, 180, 255), -1)
     return roi_box
+
+
+def _draw_scored_lines(
+    annotated: Any,
+    points: list[list[float]],
+    scores: list[float],
+    skeleton: tuple[tuple[int, int], ...],
+    roi_box: tuple[int, int, int, int],
+    score_threshold: float,
+    color: tuple[int, int, int],
+    thickness: int,
+) -> None:
+    for start, end in skeleton:
+        if start >= len(points) or end >= len(points) or start >= len(scores) or end >= len(scores):
+            continue
+        if scores[start] < score_threshold or scores[end] < score_threshold:
+            continue
+        if not (_point_inside_roi(points[start], roi_box) and _point_inside_roi(points[end], roi_box)):
+            continue
+        cv2.line(
+            annotated,
+            (int(points[start][0]), int(points[start][1])),
+            (int(points[end][0]), int(points[end][1])),
+            color,
+            thickness,
+        )
 
 
 def _point_inside_roi(
