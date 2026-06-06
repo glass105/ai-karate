@@ -52,11 +52,18 @@ class FakeNhwcFp16Input:
 
 class FakeOnnxOutput:
     name = "simcc"
+    shape = [1, 1]
+
+
+class FakeDirectKeypointOutput:
+    name = "keypoints"
+    shape = [1, 133, 3]
 
 
 class FakeFp16Session:
-    def __init__(self, input_meta=None) -> None:
+    def __init__(self, input_meta=None, output_meta=None) -> None:
         self.input_meta = input_meta or FakeOnnxInput()
+        self.output_meta = output_meta or FakeOnnxOutput()
         self.received_dtype = None
         self.received_shape = None
 
@@ -64,7 +71,7 @@ class FakeFp16Session:
         return [self.input_meta]
 
     def get_outputs(self):
-        return [FakeOnnxOutput()]
+        return [self.output_meta]
 
     def run(self, outputs, inputs):
         input_tensor = next(iter(inputs.values()))
@@ -74,8 +81,9 @@ class FakeFp16Session:
 
 
 class FakePoseModel:
-    def __init__(self, input_meta=None) -> None:
-        self.session = FakeFp16Session(input_meta)
+    def __init__(self, input_meta=None, output_meta=None) -> None:
+        self.session = FakeFp16Session(input_meta, output_meta)
+        self.model_input_size = (4, 4)
 
     def inference(self, img):
         return []
@@ -200,6 +208,19 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
 
         self.assertEqual(pose_model.session.received_dtype, np.float16)
         self.assertEqual(pose_model.session.received_shape, (1, 4, 4, 3))
+
+    def test_patches_direct_keypoint_rtm_output(self) -> None:
+        pose_model = FakePoseModel(FakeNhwcFp16Input(), FakeDirectKeypointOutput())
+        output = np.zeros((1, 133, 3), dtype=np.float16)
+        output[0, 0] = [2.0, 2.0, 0.75]
+
+        patch_rtm_fp16_input(pose_model)
+        keypoints, scores = pose_model.postprocess([output], center=np.array([10.0, 20.0]), scale=np.array([8.0, 16.0]))
+
+        self.assertEqual(keypoints.shape, (1, 133, 2))
+        self.assertEqual(scores.shape, (1, 133))
+        self.assertTrue(np.allclose(keypoints[0, 0], [10.0, 20.0]))
+        self.assertAlmostEqual(float(scores[0, 0]), 0.75)
 
 
 if __name__ == "__main__":

@@ -152,6 +152,20 @@ def patch_rtm_fp16_input(pose_model: Any) -> None:
         return self.session.run(sess_output, sess_input)
 
     pose_model.inference = MethodType(inference, pose_model)
+    outputs = session.get_outputs()
+    if len(outputs) == 1 and list(getattr(outputs[0], "shape", []) or [])[-1:] == [3]:
+
+        def postprocess(self: Any, outputs: list[Any], center: Any, scale: Any) -> tuple[Any, Any]:
+            direct = np.asarray(outputs[0])
+            if direct.ndim == 3:
+                direct = direct[0]
+            keypoints = direct[:, :2].astype(np.float32)
+            scores = direct[:, 2].astype(np.float32)
+            keypoints = keypoints / np.asarray(self.model_input_size, dtype=np.float32) * np.asarray(scale, dtype=np.float32)
+            keypoints = keypoints + np.asarray(center, dtype=np.float32) - np.asarray(scale, dtype=np.float32) / 2
+            return keypoints[None, :, :], scores[None, :]
+
+        pose_model.postprocess = MethodType(postprocess, pose_model)
 
 
 def build_tracker(tracker_name: str, reid_weights: Path) -> Any:
