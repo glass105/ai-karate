@@ -646,8 +646,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     overlay_text,
                     (x1, min(max(20, y1 + 16), max(20, y2 - 4))),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.45,
-                    (0, 180, 255),
+                    0.7,
+                    (0, 0, 0),
                     1,
                 )
             if selected is not None:
