@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-enable-face-match", action="store_true")
     parser.add_argument("--fighter-a-reject-face-mismatch", action="store_true")
     parser.add_argument("--fighter-a-min-face-match-score", default=0.35, type=float)
-    parser.add_argument("--fighter-a-min-red-glove-score", default=0.35, type=float)
+    parser.add_argument("--fighter-a-min-red-glove-score", default=0.20, type=float)
     parser.add_argument("--fighter-a-min-white-glove-score", default=0.02, type=float)
     parser.add_argument("--fighter-a-min-standing-score", default=0.45, type=float)
     parser.add_argument("--experiment-label")

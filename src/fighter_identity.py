@@ -89,7 +89,7 @@ class FighterIdentity:
         expect_pose_reference_match: bool = False,
         expect_face_match: bool = False,
         reject_face_mismatch: bool = False,
-        min_red_glove_score: float = 0.35,
+        min_red_glove_score: float = 0.20,
         min_white_glove_score: float = 0.02,
         min_standing_score: float = 0.45,
         min_reference_match_score: float = 0.05,
