@@ -41,6 +41,13 @@ class FakeBoxGuidedEstimator:
 class FakeOnnxInput:
     name = "images"
     type = "tensor(float16)"
+    shape = [1, 3, 4, 4]
+
+
+class FakeNhwcFp16Input:
+    name = "image"
+    type = "tensor(float16)"
+    shape = [1, 4, 4, 3]
 
 
 class FakeOnnxOutput:
@@ -48,23 +55,27 @@ class FakeOnnxOutput:
 
 
 class FakeFp16Session:
-    def __init__(self) -> None:
+    def __init__(self, input_meta=None) -> None:
+        self.input_meta = input_meta or FakeOnnxInput()
         self.received_dtype = None
+        self.received_shape = None
 
     def get_inputs(self):
-        return [FakeOnnxInput()]
+        return [self.input_meta]
 
     def get_outputs(self):
         return [FakeOnnxOutput()]
 
     def run(self, outputs, inputs):
-        self.received_dtype = inputs["images"].dtype
+        input_tensor = next(iter(inputs.values()))
+        self.received_dtype = input_tensor.dtype
+        self.received_shape = input_tensor.shape
         return [np.zeros((1, 1), dtype=np.float32)]
 
 
 class FakePoseModel:
-    def __init__(self) -> None:
-        self.session = FakeFp16Session()
+    def __init__(self, input_meta=None) -> None:
+        self.session = FakeFp16Session(input_meta)
 
     def inference(self, img):
         return []
@@ -178,6 +189,17 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         pose_model.inference(image)
 
         self.assertEqual(pose_model.session.received_dtype, np.float16)
+        self.assertEqual(pose_model.session.received_shape, (1, 3, 4, 4))
+
+    def test_patches_nhwc_fp16_rtm_session_layout(self) -> None:
+        pose_model = FakePoseModel(FakeNhwcFp16Input())
+        image = np.zeros((4, 4, 3), dtype=np.float32)
+
+        patch_rtm_fp16_input(pose_model)
+        pose_model.inference(image)
+
+        self.assertEqual(pose_model.session.received_dtype, np.float16)
+        self.assertEqual(pose_model.session.received_shape, (1, 4, 4, 3))
 
 
 if __name__ == "__main__":

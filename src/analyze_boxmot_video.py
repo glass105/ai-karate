@@ -125,18 +125,28 @@ def build_box_guided_rtm_estimator(pose_backend: str) -> BoxGuidedRtmPoseEstimat
 
 
 def patch_rtm_fp16_input(pose_model: Any) -> None:
-    """Allow RTMLib to run fp16 ONNX exports used by some RTMW mirrors."""
+    """Allow RTMLib to run alternate RTMW ONNX exports used by some mirrors."""
     session = getattr(pose_model, "session", None)
     if session is None or not hasattr(session, "get_inputs"):
         return
     inputs = session.get_inputs()
-    if not inputs or getattr(inputs[0], "type", "") != "tensor(float16)":
+    if not inputs:
+        return
+    input_meta = inputs[0]
+    input_type = getattr(input_meta, "type", "")
+    input_shape = list(getattr(input_meta, "shape", []) or [])
+    expects_fp16 = input_type == "tensor(float16)"
+    expects_nhwc = len(input_shape) == 4 and input_shape[-1] == 3
+    if not expects_fp16 and not expects_nhwc:
         return
 
     def inference(self: Any, img: Any) -> list[Any]:
-        img = img.transpose(2, 0, 1)
-        img = np.ascontiguousarray(img, dtype=np.float16)
-        input_tensor = img[None, :, :, :]
+        dtype = np.float16 if expects_fp16 else np.float32
+        if expects_nhwc:
+            input_tensor = np.ascontiguousarray(img[None, :, :, :], dtype=dtype)
+        else:
+            img_chw = img.transpose(2, 0, 1)
+            input_tensor = np.ascontiguousarray(img_chw[None, :, :, :], dtype=dtype)
         sess_input = {self.session.get_inputs()[0].name: input_tensor}
         sess_output = [out.name for out in self.session.get_outputs()]
         return self.session.run(sess_output, sess_input)
