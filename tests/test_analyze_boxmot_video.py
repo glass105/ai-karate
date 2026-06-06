@@ -10,6 +10,7 @@ from src.analyze_boxmot_video import (
     build_parser,
     detections_array,
     load_reference_descriptors,
+    patch_rtm_fp16_input,
     reference_match_score,
     rtm_candidates,
 )
@@ -35,6 +36,38 @@ class FakeBoxGuidedEstimator:
         points[0, :17, 1] = np.linspace(30, 210, 17)
         points[0, 120] = [500, 500]
         return points, scores
+
+
+class FakeOnnxInput:
+    name = "images"
+    type = "tensor(float16)"
+
+
+class FakeOnnxOutput:
+    name = "simcc"
+
+
+class FakeFp16Session:
+    def __init__(self) -> None:
+        self.received_dtype = None
+
+    def get_inputs(self):
+        return [FakeOnnxInput()]
+
+    def get_outputs(self):
+        return [FakeOnnxOutput()]
+
+    def run(self, outputs, inputs):
+        self.received_dtype = inputs["images"].dtype
+        return [np.zeros((1, 1), dtype=np.float32)]
+
+
+class FakePoseModel:
+    def __init__(self) -> None:
+        self.session = FakeFp16Session()
+
+    def inference(self, img):
+        return []
 
 
 class AnalyzeBoxmotVideoTests(unittest.TestCase):
@@ -136,6 +169,15 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         candidates = rtm_candidates(FakeBoxGuidedEstimator(), frame, 0.35)
 
         self.assertEqual(candidates[0]["box"], (10, 20, 110, 220))
+
+    def test_patches_fp16_rtm_session_input_dtype(self) -> None:
+        pose_model = FakePoseModel()
+        image = np.zeros((4, 4, 3), dtype=np.float32)
+
+        patch_rtm_fp16_input(pose_model)
+        pose_model.inference(image)
+
+        self.assertEqual(pose_model.session.received_dtype, np.float16)
 
 
 if __name__ == "__main__":

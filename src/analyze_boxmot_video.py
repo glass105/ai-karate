@@ -6,6 +6,7 @@ import argparse
 import csv
 import json
 from pathlib import Path
+from types import MethodType
 from typing import Any
 
 import cv2
@@ -119,7 +120,28 @@ def build_box_guided_rtm_estimator(pose_backend: str) -> BoxGuidedRtmPoseEstimat
         backend="onnxruntime",
         device="cuda",
     )
+    patch_rtm_fp16_input(pose_model)
     return BoxGuidedRtmPoseEstimator(pose_model, keypoint_count)
+
+
+def patch_rtm_fp16_input(pose_model: Any) -> None:
+    """Allow RTMLib to run fp16 ONNX exports used by some RTMW mirrors."""
+    session = getattr(pose_model, "session", None)
+    if session is None or not hasattr(session, "get_inputs"):
+        return
+    inputs = session.get_inputs()
+    if not inputs or getattr(inputs[0], "type", "") != "tensor(float16)":
+        return
+
+    def inference(self: Any, img: Any) -> list[Any]:
+        img = img.transpose(2, 0, 1)
+        img = np.ascontiguousarray(img, dtype=np.float16)
+        input_tensor = img[None, :, :, :]
+        sess_input = {self.session.get_inputs()[0].name: input_tensor}
+        sess_output = [out.name for out in self.session.get_outputs()]
+        return self.session.run(sess_output, sess_input)
+
+    pose_model.inference = MethodType(inference, pose_model)
 
 
 def build_tracker(tracker_name: str, reid_weights: Path) -> Any:
