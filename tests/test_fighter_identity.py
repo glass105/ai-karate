@@ -320,6 +320,31 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertEqual(identity.identity_scores[10].rejection_reason, "red_below_threshold")
         self.assertEqual(identity.identity_scores[20].rejection_reason, "blue_glove")
         self.assertGreaterEqual(identity.identity_scores[20].gabriel_candidate_score, 0.0)
+        self.assertEqual(identity.identity_scores[20].blue_glove_score, 0.9)
+        self.assertTrue(identity.identity_scores[20].hard_reject_active)
+
+    def test_identity_scores_report_match_gap_and_confirmed_not_top(self) -> None:
+        identity = FighterIdentity("Gabriel", "left")
+
+        identity.observe(
+            [
+                TrackedBox(10, 100, 0, 300, 400, red_glove_score=0.2),
+                TrackedBox(20, 500, 0, 700, 400, red_glove_score=0.8),
+            ]
+        )
+
+        self.assertEqual(identity.label(10), "Gabriel")
+        self.assertLess(identity.identity_scores[10].match_gap, 0.0)
+        self.assertTrue(identity.identity_scores[10].confirmed_not_top)
+        self.assertGreater(identity.identity_scores[20].match_gap, 0.0)
+
+    def test_identity_scores_include_face_detected(self) -> None:
+        identity = FighterIdentity("Gabriel", "left", reject_face_mismatch=True, min_face_match_score=0.5)
+
+        identity.observe([TrackedBox(10, 100, 0, 300, 400, face_detected=True, face_match_score=0.1)])
+
+        self.assertTrue(identity.identity_scores[10].face_detected)
+        self.assertTrue(identity.identity_scores[10].hard_reject_active)
 
     def test_lineup_pause_reanchors_to_initial_left_side(self) -> None:
         identity = FighterIdentity(

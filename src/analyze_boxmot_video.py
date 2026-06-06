@@ -557,8 +557,9 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "bbox", "keypoints", "red_glove_score", "white_glove_score", "blue_glove_score", "white_uniform_score",
         "black_belt_score", "standing_score", "reference_match_score", "pose_reference_match_score",
         "face_detected", "face_match_score", "gabriel_candidate_score", "id_red_wrist_score",
-        "id_pose_reference_score", "id_face_match_score", "id_continuity_score", "id_reset_side_score",
-        "id_rejection_reason", "id_visual_state", "estimated_action",
+        "id_blue_glove_score", "id_pose_reference_score", "id_face_detected", "id_face_match_score",
+        "id_continuity_score", "id_reset_side_score", "id_match_gap", "id_confirmed_not_top",
+        "id_hard_reject_active", "id_rejection_reason", "id_visual_state", "estimated_action",
     ]
     with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
         csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -613,15 +614,22 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 debug_parts = []
                 for score in sorted(identity_scores.values(), key=lambda item: item.gabriel_candidate_score, reverse=True)[:4]:
                     debug_parts.append(
-                        "track={track} score={score:.3f} red={red:.3f} pose={pose:.3f} "
-                        "face={face:.3f} cont={cont:.3f} reset={reset:.3f} state={state} reject={reject}".format(
+                        "track={track} score={score:.3f} red={red:.3f} blue={blue:.3f} pose={pose:.3f} "
+                        "face_detected={face_detected} face={face:.3f} cont={cont:.3f} reset={reset:.3f} "
+                        "gap={gap:.3f} confirmed_not_top={confirmed_not_top} hard_reject={hard_reject} "
+                        "state={state} reject={reject}".format(
                             track=score.track_id,
                             score=score.gabriel_candidate_score,
                             red=score.red_wrist_score,
+                            blue=score.blue_glove_score,
                             pose=score.pose_reference_score,
+                            face_detected=score.face_detected,
                             face=score.face_match_score,
                             cont=score.continuity_score,
                             reset=score.reset_side_score,
+                            gap=score.match_gap,
+                            confirmed_not_top=score.confirmed_not_top,
+                            hard_reject=score.hard_reject_active,
                             state="confirmed" if score.confirmed else "tentative" if score.tentative else "candidate",
                             reject=score.rejection_reason or "none",
                         )
@@ -702,10 +710,15 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "face_match_score": round(candidate.get("face_match_score", 0.0), 4),
                         "gabriel_candidate_score": round(score.gabriel_candidate_score, 4) if score else 0.0,
                         "id_red_wrist_score": round(score.red_wrist_score, 4) if score else 0.0,
+                        "id_blue_glove_score": round(score.blue_glove_score, 4) if score else 0.0,
                         "id_pose_reference_score": round(score.pose_reference_score, 4) if score else 0.0,
+                        "id_face_detected": score.face_detected if score else False,
                         "id_face_match_score": round(score.face_match_score, 4) if score else 0.0,
                         "id_continuity_score": round(score.continuity_score, 4) if score else 0.0,
                         "id_reset_side_score": round(score.reset_side_score, 4) if score else 0.0,
+                        "id_match_gap": round(score.match_gap, 4) if score else 0.0,
+                        "id_confirmed_not_top": score.confirmed_not_top if score else False,
+                        "id_hard_reject_active": score.hard_reject_active if score else False,
                         "id_rejection_reason": score.rejection_reason if score else "",
                         "id_visual_state": visual_state,
                         "estimated_action": action,

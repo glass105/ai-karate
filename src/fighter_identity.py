@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import dist, sqrt
 from typing import Iterable, Sequence
 
@@ -56,11 +56,16 @@ class IdentityScore:
     track_id: int
     gabriel_candidate_score: float
     red_wrist_score: float
+    blue_glove_score: float
     pose_reference_score: float
     face_match_score: float
+    face_detected: bool
     continuity_score: float
     reset_side_score: float
+    match_gap: float
     rejection_reason: str = ""
+    hard_reject_active: bool = False
+    confirmed_not_top: bool = False
     confirmed: bool = False
     tentative: bool = False
 
@@ -427,17 +432,11 @@ class FighterIdentity:
         self._visual_tentative = tentative
         if box.track_id in self._last_scores:
             score = self._last_scores[box.track_id]
-            self._last_scores[box.track_id] = IdentityScore(
-                score.track_id,
-                score.gabriel_candidate_score,
-                score.red_wrist_score,
-                score.pose_reference_score,
-                score.face_match_score,
-                score.continuity_score,
-                score.reset_side_score,
-                score.rejection_reason,
+            self._last_scores[box.track_id] = replace(
+                score,
                 confirmed=not tentative,
                 tentative=tentative,
+                confirmed_not_top=not tentative and score.match_gap < 0,
             )
 
     def _set_grace_visual(self) -> bool:
@@ -482,7 +481,7 @@ class FighterIdentity:
         if active_fighters:
             centers = [box.center_x for box in active_fighters]
             reset_side_x = min(centers) if self.fighter_a_start == "left" else max(centers)
-        scores = {}
+        scored_entries = []
         for box in boxes:
             continuity = self._continuity_score(box)
             reset_side_score = 1.0 if reset_side_x is not None and box.center_x == reset_side_x else 0.0
@@ -502,15 +501,28 @@ class FighterIdentity:
             total_weight = sum(weight for _, weight in cue_values)
             candidate_score = sum(value * weight for value, weight in cue_values) / total_weight
             reason = self._rejection_reason(box, active_ids)
+            scored_entries.append((box, max(0.0, min(1.0, candidate_score)), continuity, reset_side_score, reason))
+        scores = {}
+        for box, candidate_score, continuity, reset_side_score, reason in scored_entries:
+            other_scores = [
+                score
+                for other_box, score, *_ in scored_entries
+                if other_box.track_id != box.track_id
+            ]
+            next_best_score = max(other_scores) if other_scores else 0.0
             scores[box.track_id] = IdentityScore(
                 track_id=box.track_id,
-                gabriel_candidate_score=max(0.0, min(1.0, candidate_score)),
+                gabriel_candidate_score=candidate_score,
                 red_wrist_score=box.red_glove_score,
+                blue_glove_score=box.blue_glove_score,
                 pose_reference_score=box.pose_reference_match_score,
                 face_match_score=box.face_match_score,
+                face_detected=box.face_detected,
                 continuity_score=continuity,
                 reset_side_score=reset_side_score,
+                match_gap=candidate_score - next_best_score,
                 rejection_reason=reason,
+                hard_reject_active=self._is_hard_reject(reason),
             )
         return scores
 
@@ -536,6 +548,14 @@ class FighterIdentity:
                 return "red_below_threshold_continuity_ok"
             return "red_below_threshold"
         return ""
+
+    def _is_hard_reject(self, reason: str) -> bool:
+        return reason in {
+            "blue_glove",
+            "face_mismatch",
+            "not_standing",
+            "reference_below_threshold",
+        }
 
     def _update_lineup_state(self, boxes: list[TrackedBox]) -> TrackedBox | None:
         """Re-anchor to the configured side once fighters pause in a separated lineup."""
