@@ -51,6 +51,20 @@ class TrackedBox:
         return self.width * self.height
 
 
+@dataclass(frozen=True)
+class IdentityScore:
+    track_id: int
+    gabriel_candidate_score: float
+    red_wrist_score: float
+    pose_reference_score: float
+    face_match_score: float
+    continuity_score: float
+    reset_side_score: float
+    rejection_reason: str = ""
+    confirmed: bool = False
+    tentative: bool = False
+
+
 def pose_descriptor(box: TrackedBox, keypoints: Keypoints) -> tuple[float, ...]:
     """Normalize pose coordinates within a detection box for comparison."""
     descriptor = []
@@ -98,6 +112,8 @@ class FighterIdentity:
         recovery_confirmation_frames: int = 2,
         fighter_candidate_limit: int = 4,
         strong_recovery_threshold: float = 0.35,
+        visual_confidence_threshold: float = 0.45,
+        visual_grace_frames: int = 15,
         lineup_pause_frames: int = 45,
         lineup_motion_threshold: float = 0.06,
         lineup_separation_threshold: float = 1.50,
@@ -136,6 +152,8 @@ class FighterIdentity:
         self.recovery_confirmation_frames = recovery_confirmation_frames
         self.fighter_candidate_limit = fighter_candidate_limit
         self.strong_recovery_threshold = strong_recovery_threshold
+        self.visual_confidence_threshold = visual_confidence_threshold
+        self.visual_grace_frames = visual_grace_frames
         self.lineup_pause_frames = lineup_pause_frames
         self.lineup_motion_threshold = lineup_motion_threshold
         self.lineup_separation_threshold = lineup_separation_threshold
@@ -154,32 +172,43 @@ class FighterIdentity:
         self._lineup_reset_applied = False
         self._previous_foreground: dict[int, TrackedBox] = {}
         self._foreground_max_height = 1.0
+        self._last_scores: dict[int, IdentityScore] = {}
+        self._visual_track_id: int | None = None
+        self._visual_box: TrackedBox | None = None
+        self._visual_tentative = False
 
     def observe(self, boxes: Iterable[TrackedBox]) -> int | None:
         boxes = list(boxes)
         if not boxes:
             self._missing_frames += 1
             self._visible_track_id = None
+            self._set_grace_visual()
             self._clear_pending()
             self._update_lineup_state([])
+            self._last_scores = {}
             return None
         foreground = self._fighter_candidates(boxes)
+        active_fighters = self._active_fighter_candidates(foreground)
         self._foreground_max_height = max(box.height for box in foreground)
+        self._last_scores = self._score_candidates(foreground, active_fighters)
         if self.fighter_a_track_id is None:
-            ordered = sorted(self._eligible_recovery_candidates(foreground), key=lambda box: box.center_x)
+            ordered = sorted(self._eligible_recovery_candidates(active_fighters), key=lambda box: box.center_x)
             if not ordered:
+                self._set_tentative_visual(active_fighters)
                 return None
             selected = ordered[0] if self.fighter_a_start == "left" else ordered[-1]
             self._accept(selected)
-            self._update_lineup_state(foreground)
+            self._update_lineup_state(active_fighters)
+            self._mark_visual(selected, tentative=False)
             return selected.track_id
 
-        lineup_reset = self._update_lineup_state(foreground)
+        lineup_reset = self._update_lineup_state(active_fighters)
         if lineup_reset is not None:
             if lineup_reset.track_id != self.fighter_a_track_id:
                 self.recovery_count += 1
             self.reset_count += 1
             self._accept(lineup_reset)
+            self._mark_visual(lineup_reset, tentative=False)
             return lineup_reset.track_id
 
         current = next(
@@ -188,20 +217,24 @@ class FighterIdentity:
         )
         if current is not None and self._is_plausible(current):
             self._accept(current)
+            self._mark_visual(current, tentative=False)
             return current.track_id
 
         self._missing_frames += 1
         self._visible_track_id = None
         if self._last_observation is None:
+            self._set_tentative_visual(active_fighters)
             return None
         resetting = self._missing_frames >= self.reset_after_missing_frames
         reset_side_x = None
         if resetting:
-            centers = [box.center_x for box in foreground]
+            centers = [box.center_x for box in active_fighters]
             reset_side_x = min(centers) if self.fighter_a_start == "left" else max(centers)
-        eligible = self._eligible_recovery_candidates(foreground)
+        eligible = self._eligible_recovery_candidates(active_fighters, allow_soft_red=not resetting)
         if not eligible:
             self._clear_pending()
+            if not self._set_tentative_visual(active_fighters):
+                self._set_grace_visual()
             return None
         scored = sorted([
             (self._match_score(box, reset_side_x=reset_side_x), box)
@@ -210,6 +243,8 @@ class FighterIdentity:
         score, selected = scored[0]
         if score > self.recovery_threshold:
             self._clear_pending()
+            if not self._set_tentative_visual(active_fighters):
+                self._set_grace_visual()
             return None
         if score <= self.strong_recovery_threshold:
             if selected.track_id != self.fighter_a_track_id:
@@ -217,6 +252,7 @@ class FighterIdentity:
             if resetting:
                 self.reset_count += 1
             self._accept(selected)
+            self._mark_visual(selected, tentative=False)
             return selected.track_id
         if selected.track_id == self._pending_track_id:
             self._pending_frames += 1
@@ -224,12 +260,14 @@ class FighterIdentity:
             self._pending_track_id = selected.track_id
             self._pending_frames = 1
         if self._pending_frames < self.recovery_confirmation_frames:
+            self._mark_visual(selected, tentative=True)
             return None
         if selected.track_id != self.fighter_a_track_id:
             self.recovery_count += 1
         if resetting:
             self.reset_count += 1
         self._accept(selected)
+        self._mark_visual(selected, tentative=False)
         return selected.track_id
 
     def label(self, track_id: int) -> str:
@@ -240,6 +278,22 @@ class FighterIdentity:
     @property
     def active_track_id(self) -> int | None:
         return self._visible_track_id
+
+    @property
+    def visual_track_id(self) -> int | None:
+        return self._visual_track_id
+
+    @property
+    def visual_box(self) -> TrackedBox | None:
+        return self._visual_box
+
+    @property
+    def visual_tentative(self) -> bool:
+        return self._visual_tentative
+
+    @property
+    def identity_scores(self) -> dict[int, IdentityScore]:
+        return self._last_scores
 
     def _is_plausible(self, box: TrackedBox) -> bool:
         if self._last_observation is None:
@@ -262,6 +316,7 @@ class FighterIdentity:
         self._last_observation = box
         self._missing_frames = 0
         self._clear_pending()
+        self._mark_visual(box, tentative=False)
         if box.appearance:
             if not self._appearance_template:
                 self._appearance_template = tuple(box.appearance)
@@ -315,12 +370,35 @@ class FighterIdentity:
         """Limit identity decisions to the largest foreground people."""
         return sorted(boxes, key=lambda box: box.area, reverse=True)[: self.fighter_candidate_limit]
 
-    def _eligible_recovery_candidates(self, boxes: list[TrackedBox]) -> list[TrackedBox]:
+    def _active_fighter_candidates(self, boxes: list[TrackedBox]) -> list[TrackedBox]:
+        """Focus identity decisions on the two most likely standing fighters."""
+        standing = [
+            box
+            for box in boxes
+            if not self.require_standing or box.standing_score >= self.min_standing_score
+        ]
+        ordered = sorted(standing or boxes, key=lambda box: box.area, reverse=True)[:2]
+        current = next((box for box in boxes if box.track_id == self.fighter_a_track_id), None)
+        if current is not None and current not in ordered:
+            ordered = [current] + [box for box in ordered if box.track_id != current.track_id]
+            ordered = ordered[:2]
+        return ordered
+
+    def _eligible_recovery_candidates(
+        self,
+        boxes: list[TrackedBox],
+        *,
+        allow_soft_red: bool = False,
+    ) -> list[TrackedBox]:
         """Reject people who cannot be Gabriel before assigning a new identity."""
         return [
             box
             for box in boxes
-            if (not self.require_red_gloves or box.red_glove_score >= self.min_red_glove_score)
+            if (
+                not self.require_red_gloves
+                or box.red_glove_score >= self.min_red_glove_score
+                or (allow_soft_red and self._has_strong_continuity(box))
+            )
             and (not self.require_white_gloves or box.white_glove_score >= self.min_white_glove_score)
             and (
                 not self.reject_blue_gloves
@@ -337,6 +415,127 @@ class FighterIdentity:
                 or box.face_match_score >= self.min_face_match_score
             )
         ]
+
+    def _has_strong_continuity(self, box: TrackedBox) -> bool:
+        if self._last_observation is None:
+            return False
+        return self._match_score(box) <= self.strong_recovery_threshold
+
+    def _mark_visual(self, box: TrackedBox, *, tentative: bool) -> None:
+        self._visual_track_id = box.track_id
+        self._visual_box = box
+        self._visual_tentative = tentative
+        if box.track_id in self._last_scores:
+            score = self._last_scores[box.track_id]
+            self._last_scores[box.track_id] = IdentityScore(
+                score.track_id,
+                score.gabriel_candidate_score,
+                score.red_wrist_score,
+                score.pose_reference_score,
+                score.face_match_score,
+                score.continuity_score,
+                score.reset_side_score,
+                score.rejection_reason,
+                confirmed=not tentative,
+                tentative=tentative,
+            )
+
+    def _set_grace_visual(self) -> bool:
+        if self._last_observation is None or self._missing_frames > self.visual_grace_frames:
+            self._visual_track_id = None
+            self._visual_box = None
+            self._visual_tentative = False
+            return False
+        self._visual_track_id = self._last_observation.track_id
+        self._visual_box = self._last_observation
+        self._visual_tentative = True
+        return True
+
+    def _set_tentative_visual(self, boxes: list[TrackedBox]) -> bool:
+        scored = sorted(
+            (
+                (self._last_scores.get(box.track_id), box)
+                for box in boxes
+                if box.track_id in self._last_scores
+            ),
+            key=lambda item: item[0].gabriel_candidate_score if item[0] is not None else 0.0,
+            reverse=True,
+        )
+        if not scored or scored[0][0] is None:
+            self._visual_track_id = None
+            self._visual_box = None
+            self._visual_tentative = False
+            return False
+        score, box = scored[0]
+        if score.gabriel_candidate_score < self.visual_confidence_threshold:
+            return False
+        self._mark_visual(box, tentative=True)
+        return True
+
+    def _score_candidates(
+        self,
+        boxes: list[TrackedBox],
+        active_fighters: list[TrackedBox],
+    ) -> dict[int, IdentityScore]:
+        active_ids = {box.track_id for box in active_fighters}
+        reset_side_x = None
+        if active_fighters:
+            centers = [box.center_x for box in active_fighters]
+            reset_side_x = min(centers) if self.fighter_a_start == "left" else max(centers)
+        scores = {}
+        for box in boxes:
+            continuity = self._continuity_score(box)
+            reset_side_score = 1.0 if reset_side_x is not None and box.center_x == reset_side_x else 0.0
+            cue_values = []
+            cue_values.append((box.red_glove_score, 0.30))
+            cue_values.append((box.standing_score, 0.10))
+            if self.expect_reference_match:
+                cue_values.append((box.reference_match_score, 0.15))
+            if self.expect_pose_reference_match:
+                cue_values.append((box.pose_reference_match_score, 0.20))
+            if self.expect_face_match and box.face_detected:
+                cue_values.append((box.face_match_score, 0.25))
+            if self._last_observation is not None:
+                cue_values.append((continuity, 0.25))
+            else:
+                cue_values.append((reset_side_score, 0.15))
+            total_weight = sum(weight for _, weight in cue_values)
+            candidate_score = sum(value * weight for value, weight in cue_values) / total_weight
+            reason = self._rejection_reason(box, active_ids)
+            scores[box.track_id] = IdentityScore(
+                track_id=box.track_id,
+                gabriel_candidate_score=max(0.0, min(1.0, candidate_score)),
+                red_wrist_score=box.red_glove_score,
+                pose_reference_score=box.pose_reference_match_score,
+                face_match_score=box.face_match_score,
+                continuity_score=continuity,
+                reset_side_score=reset_side_score,
+                rejection_reason=reason,
+            )
+        return scores
+
+    def _continuity_score(self, box: TrackedBox) -> float:
+        if self._last_observation is None:
+            return 0.0
+        score = self._match_score(box)
+        return max(0.0, min(1.0, 1.0 - score / self.recovery_threshold))
+
+    def _rejection_reason(self, box: TrackedBox, active_ids: set[int]) -> str:
+        if box.track_id not in active_ids:
+            return "not_active_fighter_pair"
+        if self.reject_blue_gloves and box.blue_glove_score >= max(box.red_glove_score, box.white_glove_score):
+            return "blue_glove"
+        if self.require_standing and box.standing_score < self.min_standing_score:
+            return "not_standing"
+        if self.reject_face_mismatch and box.face_detected and box.face_match_score < self.min_face_match_score:
+            return "face_mismatch"
+        if self.require_reference_match and box.reference_match_score < self.min_reference_match_score:
+            return "reference_below_threshold"
+        if self.require_red_gloves and box.red_glove_score < self.min_red_glove_score:
+            if self._has_strong_continuity(box):
+                return "red_below_threshold_continuity_ok"
+            return "red_below_threshold"
+        return ""
 
     def _update_lineup_state(self, boxes: list[TrackedBox]) -> TrackedBox | None:
         """Re-anchor to the configured side once fighters pause in a separated lineup."""

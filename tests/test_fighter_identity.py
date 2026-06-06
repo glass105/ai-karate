@@ -204,6 +204,8 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertIsNone(selected)
         self.assertEqual(identity.label(20), "fighter-20")
         self.assertEqual(identity.fighter_a_track_id, 10)
+        self.assertEqual(identity.visual_track_id, 20)
+        self.assertTrue(identity.visual_tentative)
 
     def test_recovers_label_after_confirmation_window(self) -> None:
         identity = FighterIdentity(
@@ -220,6 +222,40 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertEqual(identity.observe(replacement), 20)
         self.assertEqual(identity.label(20), "Gabriel")
         self.assertEqual(identity.recovery_count, 1)
+
+    def test_keeps_tentative_grace_visual_when_missing(self) -> None:
+        identity = FighterIdentity("Gabriel", "left", visual_grace_frames=2)
+        identity.observe([TrackedBox(10, 100, 0, 200, 100)])
+
+        selected = identity.observe([])
+
+        self.assertIsNone(selected)
+        self.assertIsNotNone(identity.visual_box)
+        self.assertEqual(identity.visual_track_id, 10)
+        self.assertTrue(identity.visual_tentative)
+
+    def test_expires_tentative_grace_visual_after_missing_window(self) -> None:
+        identity = FighterIdentity("Gabriel", "left", visual_grace_frames=1)
+        identity.observe([TrackedBox(10, 100, 0, 200, 100)])
+
+        identity.observe([])
+        identity.observe([])
+
+        self.assertIsNone(identity.visual_box)
+
+    def test_soft_red_glove_drop_keeps_strong_continuity_recovery(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            require_red_gloves=True,
+            recovery_confirmation_frames=1,
+        )
+        identity.observe([TrackedBox(10, 100, 0, 200, 100, appearance=(1, 0), red_glove_score=1.0)])
+
+        selected = identity.observe([TrackedBox(20, 102, 0, 202, 100, appearance=(1, 0), red_glove_score=0.05)])
+
+        self.assertEqual(selected, 20)
+        self.assertEqual(identity.label(20), "Gabriel")
 
     def test_recovers_strong_track_replacement_immediately(self) -> None:
         identity = FighterIdentity("Gabriel", "left")
@@ -250,6 +286,40 @@ class FighterIdentityTests(unittest.TestCase):
 
         self.assertEqual(selected, 30)
         self.assertEqual(identity.label(20), "fighter-20")
+
+    def test_initial_assignment_ignores_background_outside_active_pair(self) -> None:
+        identity = FighterIdentity("Gabriel", "left", require_red_gloves=True, fighter_candidate_limit=4)
+
+        selected = identity.observe(
+            [
+                TrackedBox(10, 50, 0, 100, 80, red_glove_score=1.0),
+                TrackedBox(20, 200, 0, 400, 400, red_glove_score=0.8),
+                TrackedBox(30, 500, 0, 700, 400, red_glove_score=0.8),
+            ]
+        )
+
+        self.assertEqual(selected, 20)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "not_active_fighter_pair")
+
+    def test_identity_scores_explain_rejections(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            require_red_gloves=True,
+            reject_blue_gloves=True,
+            require_standing=True,
+        )
+
+        identity.observe(
+            [
+                TrackedBox(10, 100, 0, 300, 400, red_glove_score=0.1, standing_score=1.0),
+                TrackedBox(20, 500, 0, 700, 400, red_glove_score=0.8, blue_glove_score=0.9, standing_score=1.0),
+            ]
+        )
+
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "red_below_threshold")
+        self.assertEqual(identity.identity_scores[20].rejection_reason, "blue_glove")
+        self.assertGreaterEqual(identity.identity_scores[20].gabriel_candidate_score, 0.0)
 
     def test_lineup_pause_reanchors_to_initial_left_side(self) -> None:
         identity = FighterIdentity(

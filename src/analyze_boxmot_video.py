@@ -401,6 +401,22 @@ def _iou(first: tuple[int, int, int, int], second: tuple[int, int, int, int]) ->
     return intersection / float(first_area + second_area - intersection)
 
 
+def draw_dashed_rectangle(
+    frame: Any,
+    box: tuple[int, int, int, int],
+    color: tuple[int, int, int],
+    thickness: int = 2,
+    dash: int = 12,
+) -> None:
+    x1, y1, x2, y2 = box
+    for start in range(x1, x2, dash * 2):
+        cv2.line(frame, (start, y1), (min(start + dash, x2), y1), color, thickness)
+        cv2.line(frame, (start, y2), (min(start + dash, x2), y2), color, thickness)
+    for start in range(y1, y2, dash * 2):
+        cv2.line(frame, (x1, start), (x1, min(start + dash, y2)), color, thickness)
+        cv2.line(frame, (x2, start), (x2, min(start + dash, y2)), color, thickness)
+
+
 def analyze(args: argparse.Namespace) -> dict[str, Any]:
     if not args.input.exists():
         raise SystemExit(f"Input video not found: {args.input}")
@@ -494,7 +510,9 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "frame", "timestamp_seconds", "track_id", "fighter_label", "confidence",
         "bbox", "keypoints", "red_glove_score", "white_glove_score", "blue_glove_score", "white_uniform_score",
         "black_belt_score", "standing_score", "reference_match_score", "pose_reference_match_score",
-        "face_detected", "face_match_score", "estimated_action",
+        "face_detected", "face_match_score", "gabriel_candidate_score", "id_red_wrist_score",
+        "id_pose_reference_score", "id_face_match_score", "id_continuity_score", "id_reset_side_score",
+        "id_rejection_reason", "id_visual_state", "estimated_action",
     ]
     with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
         csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -542,11 +560,50 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     candidate["face_match_score"] = 0.0
                     candidate["face_detected"] = False
             tracked = attach_tracks(candidates, tracker.update(detections_array(candidates), frame))
-            selected_track_id = identity.observe(identity_box(candidate, frame) for candidate in tracked)
+            tracked_identity_boxes = [identity_box(candidate, frame) for candidate in tracked]
+            selected_track_id = identity.observe(tracked_identity_boxes)
+            identity_scores = identity.identity_scores
+            if identity_scores:
+                debug_parts = []
+                for score in sorted(identity_scores.values(), key=lambda item: item.gabriel_candidate_score, reverse=True)[:4]:
+                    debug_parts.append(
+                        "track={track} score={score:.3f} red={red:.3f} pose={pose:.3f} "
+                        "face={face:.3f} cont={cont:.3f} reset={reset:.3f} state={state} reject={reject}".format(
+                            track=score.track_id,
+                            score=score.gabriel_candidate_score,
+                            red=score.red_wrist_score,
+                            pose=score.pose_reference_score,
+                            face=score.face_match_score,
+                            cont=score.continuity_score,
+                            reset=score.reset_side_score,
+                            state="confirmed" if score.confirmed else "tentative" if score.tentative else "candidate",
+                            reject=score.rejection_reason or "none",
+                        )
+                    )
+                print(f"ID confidence scores frame={frame_count}: " + " | ".join(debug_parts), flush=True)
             selected = next(
                 (candidate for candidate in tracked if candidate["track_id"] == selected_track_id),
                 None,
             )
+            for candidate in tracked:
+                score = identity_scores.get(candidate["track_id"])
+                if score is None:
+                    continue
+                clipped = clip_box_to_roi(candidate["box"], roi_box)
+                if clipped is None:
+                    continue
+                x1, y1, _, y2 = clipped
+                rejection = score.rejection_reason or "ok"
+                overlay_text = f"id={candidate['track_id']} gab={score.gabriel_candidate_score:.2f} red={score.red_wrist_score:.2f} {rejection}"
+                cv2.putText(
+                    annotated,
+                    overlay_text,
+                    (x1, min(max(20, y1 + 16), max(20, y2 - 4))),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.45,
+                    (0, 180, 255),
+                    1,
+                )
             if selected is not None:
                 gabriel_frames += 1
                 clipped = clip_box_to_roi(selected["box"], roi_box)
@@ -554,10 +611,28 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     x1, y1, x2, y2 = clipped
                     cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 255), 3)
                     cv2.putText(annotated, args.fighter_a_name, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            elif identity.visual_box is not None:
+                clipped = clip_box_to_roi(
+                    (
+                        int(identity.visual_box.x1),
+                        int(identity.visual_box.y1),
+                        int(identity.visual_box.x2),
+                        int(identity.visual_box.y2),
+                    ),
+                    roi_box,
+                )
+                if clipped is not None:
+                    x1, y1, x2, y2 = clipped
+                    draw_dashed_rectangle(annotated, clipped, (0, 255, 255), 2)
+                    cv2.putText(annotated, f"{args.fighter_a_name}?", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             for candidate in tracked:
                 track_id = candidate["track_id"]
                 action = counter.update(track_id, candidate["keypoints"])
                 label = identity.label(track_id)
+                score = identity_scores.get(track_id)
+                visual_state = ""
+                if score is not None:
+                    visual_state = "confirmed" if score.confirmed else "tentative" if score.tentative else "candidate"
                 if label == args.fighter_a_name and action:
                     named_counts[f"{action}es" if action == "punch" else "kicks"] += 1
                 csv_writer.writerow(
@@ -579,6 +654,14 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "pose_reference_match_score": round(candidate.get("pose_reference_match_score", 0.0), 4),
                         "face_detected": candidate.get("face_detected", False),
                         "face_match_score": round(candidate.get("face_match_score", 0.0), 4),
+                        "gabriel_candidate_score": round(score.gabriel_candidate_score, 4) if score else 0.0,
+                        "id_red_wrist_score": round(score.red_wrist_score, 4) if score else 0.0,
+                        "id_pose_reference_score": round(score.pose_reference_score, 4) if score else 0.0,
+                        "id_face_match_score": round(score.face_match_score, 4) if score else 0.0,
+                        "id_continuity_score": round(score.continuity_score, 4) if score else 0.0,
+                        "id_reset_side_score": round(score.reset_side_score, 4) if score else 0.0,
+                        "id_rejection_reason": score.rejection_reason if score else "",
+                        "id_visual_state": visual_state,
                         "estimated_action": action,
                     }
                 )
