@@ -233,6 +233,7 @@ def identity_box(candidate: dict[str, Any], frame: Any) -> TrackedBox:
         candidate.get("pose_reference_match_score", 0.0),
         candidate.get("face_match_score", 0.0),
         candidate.get("face_detected", False),
+        candidate.get("exclude_reference_match_score", 0.0),
     )
 
 

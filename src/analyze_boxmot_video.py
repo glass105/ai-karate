@@ -64,8 +64,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Gabriel reference image files or directories used as an appearance cue.",
     )
+    parser.add_argument(
+        "--fighter-a-exclude-reference-images",
+        nargs="*",
+        default=[Path("reference/exclude")],
+        type=Path,
+        help="Reference image files or directories that should never be labeled as Gabriel.",
+    )
     parser.add_argument("--fighter-a-require-reference-match", action="store_true")
     parser.add_argument("--fighter-a-min-reference-match-score", default=0.05, type=float)
+    parser.add_argument("--fighter-a-min-exclude-reference-match-score", default=0.75, type=float)
     parser.add_argument("--fighter-a-enable-face-match", action="store_true")
     parser.add_argument("--fighter-a-reject-face-mismatch", action="store_true")
     parser.add_argument("--fighter-a-min-face-match-score", default=0.35, type=float)
@@ -469,6 +477,9 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     roi = parse_roi(args.arena_roi)
     reference_paths, reference_descriptors = load_reference_descriptors(args.fighter_a_reference_images)
+    exclude_reference_paths, exclude_reference_descriptors = load_reference_descriptors(
+        args.fighter_a_exclude_reference_images
+    )
     face_matcher = None
     face_reference_count = 0
     if args.fighter_a_enable_face_match:
@@ -537,11 +548,13 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         expect_face_match=face_reference_count > 0,
         require_reference_match=args.fighter_a_require_reference_match,
         reject_face_mismatch=args.fighter_a_reject_face_mismatch and face_reference_count > 0,
+        reject_exclude_reference_match=bool(exclude_reference_descriptors),
         min_red_glove_score=args.fighter_a_min_red_glove_score,
         min_white_glove_score=args.fighter_a_min_white_glove_score,
         min_standing_score=args.fighter_a_min_standing_score,
         min_reference_match_score=args.fighter_a_min_reference_match_score,
         min_face_match_score=args.fighter_a_min_face_match_score,
+        min_exclude_reference_match_score=args.fighter_a_min_exclude_reference_match_score,
         reset_after_missing_frames=args.reset_to_start_side_after_missing,
         recovery_confirmation_frames=args.identity_recovery_confirmation_frames,
         fighter_candidate_limit=args.fighter_candidate_limit,
@@ -556,10 +569,11 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "frame", "timestamp_seconds", "track_id", "fighter_label", "confidence",
         "bbox", "keypoints", "red_glove_score", "white_glove_score", "blue_glove_score", "white_uniform_score",
         "black_belt_score", "standing_score", "reference_match_score", "pose_reference_match_score",
-        "face_detected", "face_match_score", "gabriel_candidate_score", "id_red_wrist_score",
+        "exclude_reference_match_score", "face_detected", "face_match_score", "gabriel_candidate_score", "id_red_wrist_score",
         "id_blue_glove_score", "id_pose_reference_score", "id_face_detected", "id_face_match_score",
-        "id_continuity_score", "id_reset_side_score", "id_match_gap", "id_confirmed_not_top",
-        "id_hard_reject_active", "id_rejection_reason", "id_visual_state", "estimated_action",
+        "id_exclude_reference_score", "id_continuity_score", "id_reset_side_score", "id_match_gap",
+        "id_confirmed_not_top", "id_hard_reject_active", "id_rejection_reason", "id_visual_state",
+        "estimated_action",
     ]
     with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
         csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
@@ -599,6 +613,11 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     candidate,
                     pose_reference_descriptors_list,
                 )
+                candidate["exclude_reference_match_score"] = reference_match_score(
+                    frame,
+                    candidate["box"],
+                    exclude_reference_descriptors,
+                )
                 if face_matcher is not None:
                     face_score, face_detected = face_matcher.match_candidate(frame, candidate["box"])
                     candidate["face_match_score"] = face_score
@@ -615,7 +634,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 for score in sorted(identity_scores.values(), key=lambda item: item.gabriel_candidate_score, reverse=True)[:4]:
                     debug_parts.append(
                         "track={track} score={score:.3f} red={red:.3f} blue={blue:.3f} pose={pose:.3f} "
-                        "face_detected={face_detected} face={face:.3f} cont={cont:.3f} reset={reset:.3f} "
+                        "face_detected={face_detected} face={face:.3f} exclude={exclude:.3f} "
+                        "cont={cont:.3f} reset={reset:.3f} "
                         "gap={gap:.3f} confirmed_not_top={confirmed_not_top} hard_reject={hard_reject} "
                         "state={state} reject={reject}".format(
                             track=score.track_id,
@@ -625,6 +645,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                             pose=score.pose_reference_score,
                             face_detected=score.face_detected,
                             face=score.face_match_score,
+                            exclude=score.exclude_reference_score,
                             cont=score.continuity_score,
                             reset=score.reset_side_score,
                             gap=score.match_gap,
@@ -648,7 +669,10 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     continue
                 x1, y1, _, y2 = clipped
                 rejection = score.rejection_reason or "ok"
-                overlay_text = f"id={candidate['track_id']} gab={score.gabriel_candidate_score:.2f} red={score.red_wrist_score:.2f} {rejection}"
+                overlay_text = (
+                    f"id={candidate['track_id']} gab={score.gabriel_candidate_score:.2f} "
+                    f"red={score.red_wrist_score:.2f} excl={score.exclude_reference_score:.2f} {rejection}"
+                )
                 cv2.putText(
                     annotated,
                     overlay_text,
@@ -656,7 +680,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.7,
                     (0, 0, 0),
-                    1,
+                    2,
                 )
             if selected is not None:
                 gabriel_frames += 1
@@ -706,6 +730,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "standing_score": round(candidate["standing_score"], 4),
                         "reference_match_score": round(candidate.get("reference_match_score", 0.0), 4),
                         "pose_reference_match_score": round(candidate.get("pose_reference_match_score", 0.0), 4),
+                        "exclude_reference_match_score": round(candidate.get("exclude_reference_match_score", 0.0), 4),
                         "face_detected": candidate.get("face_detected", False),
                         "face_match_score": round(candidate.get("face_match_score", 0.0), 4),
                         "gabriel_candidate_score": round(score.gabriel_candidate_score, 4) if score else 0.0,
@@ -714,6 +739,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "id_pose_reference_score": round(score.pose_reference_score, 4) if score else 0.0,
                         "id_face_detected": score.face_detected if score else False,
                         "id_face_match_score": round(score.face_match_score, 4) if score else 0.0,
+                        "id_exclude_reference_score": round(score.exclude_reference_score, 4) if score else 0.0,
                         "id_continuity_score": round(score.continuity_score, 4) if score else 0.0,
                         "id_reset_side_score": round(score.reset_side_score, 4) if score else 0.0,
                         "id_match_gap": round(score.match_gap, 4) if score else 0.0,
@@ -751,6 +777,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "require_standing": args.fighter_a_require_standing,
             "reference_images": [str(path) for path in reference_paths],
             "reference_image_count": len(reference_descriptors),
+            "exclude_reference_images": [str(path) for path in exclude_reference_paths],
+            "exclude_reference_image_count": len(exclude_reference_descriptors),
             "pose_reference_count": len(pose_reference_descriptors_list),
             "face_reference_count": face_reference_count,
             "require_reference_match": args.fighter_a_require_reference_match,
@@ -761,6 +789,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "min_standing_score": args.fighter_a_min_standing_score,
             "min_reference_match_score": args.fighter_a_min_reference_match_score,
             "min_face_match_score": args.fighter_a_min_face_match_score,
+            "min_exclude_reference_match_score": args.fighter_a_min_exclude_reference_match_score,
             "reset_to_start_side_after_missing_frames": args.reset_to_start_side_after_missing,
             "recovery_confirmation_frames": args.identity_recovery_confirmation_frames,
             "fighter_candidate_limit": args.fighter_candidate_limit,

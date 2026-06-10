@@ -156,15 +156,21 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
                 "--fighter-a-reference-images",
                 "refs",
                 "gabriel.png",
+                "--fighter-a-exclude-reference-images",
+                "reference/exclude",
                 "--fighter-a-require-reference-match",
                 "--fighter-a-min-reference-match-score",
                 "0.2",
+                "--fighter-a-min-exclude-reference-match-score",
+                "0.8",
             ]
         )
 
         self.assertEqual(args.fighter_a_reference_images, [Path("refs"), Path("gabriel.png")])
+        self.assertEqual(args.fighter_a_exclude_reference_images, [Path("reference/exclude")])
         self.assertTrue(args.fighter_a_require_reference_match)
         self.assertEqual(args.fighter_a_min_reference_match_score, 0.2)
+        self.assertEqual(args.fighter_a_min_exclude_reference_match_score, 0.8)
 
     def test_reference_match_scores_similar_crop_higher(self) -> None:
         with TemporaryDirectory() as temp:

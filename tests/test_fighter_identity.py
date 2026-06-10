@@ -346,6 +346,59 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertTrue(identity.identity_scores[10].face_detected)
         self.assertTrue(identity.identity_scores[10].hard_reject_active)
 
+    def test_exclude_reference_match_hard_rejects_candidate(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_exclude_reference_match=True,
+            min_exclude_reference_match_score=0.75,
+        )
+
+        selected = identity.observe(
+            [
+                TrackedBox(10, 100, 0, 300, 400, exclude_reference_match_score=0.9),
+                TrackedBox(20, 500, 0, 700, 400, exclude_reference_match_score=0.1),
+            ]
+        )
+
+        self.assertEqual(selected, 20)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference")
+        self.assertTrue(identity.identity_scores[10].hard_reject_active)
+
+    def test_exclude_reference_match_does_not_get_tentative_visual(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_exclude_reference_match=True,
+            min_exclude_reference_match_score=0.75,
+            require_red_gloves=True,
+            visual_confidence_threshold=0.1,
+        )
+
+        selected = identity.observe(
+            [TrackedBox(10, 100, 0, 300, 400, red_glove_score=1.0, exclude_reference_match_score=0.9)]
+        )
+
+        self.assertIsNone(selected)
+        self.assertIsNone(identity.visual_track_id)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference")
+
+    def test_exclude_reference_match_drops_existing_lock(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_exclude_reference_match=True,
+            min_exclude_reference_match_score=0.75,
+        )
+        identity.observe([TrackedBox(10, 100, 0, 300, 400, exclude_reference_match_score=0.1)])
+
+        selected = identity.observe([TrackedBox(10, 102, 0, 302, 400, exclude_reference_match_score=0.9)])
+
+        self.assertIsNone(selected)
+        self.assertEqual(identity.label(10), "fighter-10")
+        self.assertIsNone(identity.visual_track_id)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference")
+
     def test_lineup_pause_reanchors_to_initial_left_side(self) -> None:
         identity = FighterIdentity(
             "Gabriel",

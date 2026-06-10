@@ -29,6 +29,7 @@ class TrackedBox:
     pose_reference_match_score: float = 0.0
     face_match_score: float = 0.0
     face_detected: bool = False
+    exclude_reference_match_score: float = 0.0
 
     @property
     def center_x(self) -> float:
@@ -60,6 +61,7 @@ class IdentityScore:
     pose_reference_score: float
     face_match_score: float
     face_detected: bool
+    exclude_reference_score: float
     continuity_score: float
     reset_side_score: float
     match_gap: float
@@ -108,11 +110,13 @@ class FighterIdentity:
         expect_pose_reference_match: bool = False,
         expect_face_match: bool = False,
         reject_face_mismatch: bool = False,
+        reject_exclude_reference_match: bool = False,
         min_red_glove_score: float = 0.20,
         min_white_glove_score: float = 0.02,
         min_standing_score: float = 0.45,
         min_reference_match_score: float = 0.05,
         min_face_match_score: float = 0.35,
+        min_exclude_reference_match_score: float = 0.75,
         reset_after_missing_frames: int = 15,
         recovery_confirmation_frames: int = 2,
         fighter_candidate_limit: int = 4,
@@ -148,11 +152,13 @@ class FighterIdentity:
         self.expect_pose_reference_match = expect_pose_reference_match
         self.expect_face_match = expect_face_match
         self.reject_face_mismatch = reject_face_mismatch
+        self.reject_exclude_reference_match = reject_exclude_reference_match
         self.min_red_glove_score = min_red_glove_score
         self.min_white_glove_score = min_white_glove_score
         self.min_standing_score = min_standing_score
         self.min_reference_match_score = min_reference_match_score
         self.min_face_match_score = min_face_match_score
+        self.min_exclude_reference_match_score = min_exclude_reference_match_score
         self.reset_after_missing_frames = reset_after_missing_frames
         self.recovery_confirmation_frames = recovery_confirmation_frames
         self.fighter_candidate_limit = fighter_candidate_limit
@@ -238,6 +244,9 @@ class FighterIdentity:
         eligible = self._eligible_recovery_candidates(active_fighters, allow_soft_red=not resetting)
         if not eligible:
             self._clear_pending()
+            if self._has_exclude_reference_reject(active_fighters):
+                self._clear_visual()
+                return None
             if not self._set_tentative_visual(active_fighters):
                 self._set_grace_visual()
             return None
@@ -301,6 +310,8 @@ class FighterIdentity:
         return self._last_scores
 
     def _is_plausible(self, box: TrackedBox) -> bool:
+        if self._matches_exclude_reference(box):
+            return False
         if self._last_observation is None:
             return True
         return self._match_score(box) <= self.recovery_threshold
@@ -371,6 +382,11 @@ class FighterIdentity:
         self._pending_track_id = None
         self._pending_frames = 0
 
+    def _clear_visual(self) -> None:
+        self._visual_track_id = None
+        self._visual_box = None
+        self._visual_tentative = False
+
     def _fighter_candidates(self, boxes: list[TrackedBox]) -> list[TrackedBox]:
         """Limit identity decisions to the largest foreground people."""
         return sorted(boxes, key=lambda box: box.area, reverse=True)[: self.fighter_candidate_limit]
@@ -419,6 +435,7 @@ class FighterIdentity:
                 or not box.face_detected
                 or box.face_match_score >= self.min_face_match_score
             )
+            and not self._matches_exclude_reference(box)
         ]
 
     def _has_strong_continuity(self, box: TrackedBox) -> bool:
@@ -456,6 +473,7 @@ class FighterIdentity:
                 (self._last_scores.get(box.track_id), box)
                 for box in boxes
                 if box.track_id in self._last_scores
+                and not self._last_scores[box.track_id].hard_reject_active
             ),
             key=lambda item: item[0].gabriel_candidate_score if item[0] is not None else 0.0,
             reverse=True,
@@ -518,6 +536,7 @@ class FighterIdentity:
                 pose_reference_score=box.pose_reference_match_score,
                 face_match_score=box.face_match_score,
                 face_detected=box.face_detected,
+                exclude_reference_score=box.exclude_reference_match_score,
                 continuity_score=continuity,
                 reset_side_score=reset_side_score,
                 match_gap=candidate_score - next_best_score,
@@ -535,6 +554,8 @@ class FighterIdentity:
     def _rejection_reason(self, box: TrackedBox, active_ids: set[int]) -> str:
         if box.track_id not in active_ids:
             return "not_active_fighter_pair"
+        if self._matches_exclude_reference(box):
+            return "exclude_reference"
         if self.reject_blue_gloves and box.blue_glove_score >= max(box.red_glove_score, box.white_glove_score):
             return "blue_glove"
         if self.require_standing and box.standing_score < self.min_standing_score:
@@ -551,11 +572,25 @@ class FighterIdentity:
 
     def _is_hard_reject(self, reason: str) -> bool:
         return reason in {
+            "exclude_reference",
             "blue_glove",
             "face_mismatch",
             "not_standing",
             "reference_below_threshold",
         }
+
+    def _matches_exclude_reference(self, box: TrackedBox) -> bool:
+        return (
+            self.reject_exclude_reference_match
+            and box.exclude_reference_match_score >= self.min_exclude_reference_match_score
+        )
+
+    def _has_exclude_reference_reject(self, boxes: list[TrackedBox]) -> bool:
+        return any(
+            self._last_scores.get(box.track_id) is not None
+            and self._last_scores[box.track_id].rejection_reason == "exclude_reference"
+            for box in boxes
+        )
 
     def _update_lineup_state(self, boxes: list[TrackedBox]) -> TrackedBox | None:
         """Re-anchor to the configured side once fighters pause in a separated lineup."""
