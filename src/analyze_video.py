@@ -26,15 +26,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-taller", action="store_true")
     parser.add_argument(
         "--reset-to-start-side-after-missing",
-        default=15,
+        default=10,
         type=int,
         help="Prefer the configured starting side after this many missing frames",
     )
-    parser.add_argument("--identity-recovery-confirmation-frames", default=2, type=int)
+    parser.add_argument("--identity-recovery-confirmation-frames", default=3, type=int)
     parser.add_argument("--fighter-candidate-limit", default=4, type=int)
-    parser.add_argument("--lineup-pause-frames", default=45, type=int)
-    parser.add_argument("--lineup-motion-threshold", default=0.06, type=float)
-    parser.add_argument("--lineup-separation-threshold", default=1.50, type=float)
+    parser.add_argument("--lineup-pause-frames", default=30, type=int)
+    parser.add_argument("--lineup-motion-threshold", default=0.10, type=float)
+    parser.add_argument("--lineup-separation-threshold", default=1.20, type=float)
     parser.add_argument("--confidence", default=0.35, type=float)
     parser.add_argument("--iou", default=0.5, type=float)
     parser.add_argument(

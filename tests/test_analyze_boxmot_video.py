@@ -172,6 +172,31 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.fighter_a_min_reference_match_score, 0.2)
         self.assertEqual(args.fighter_a_min_exclude_reference_match_score, 0.8)
 
+    def test_identity_threshold_defaults(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--input",
+                "input.mp4",
+                "--output-dir",
+                "out",
+                "--pose-backend",
+                "rtmw",
+                "--tracker",
+                "boosttrack",
+            ]
+        )
+
+        self.assertEqual(args.fighter_a_min_red_glove_score, 0.15)
+        self.assertEqual(args.fighter_a_min_exclude_reference_match_score, 0.8)
+        self.assertEqual(args.fighter_a_min_face_match_score, 0.25)
+        self.assertEqual(args.identity_recovery_confirmation_frames, 3)
+        self.assertEqual(args.reset_to_start_side_after_missing, 10)
+        self.assertEqual(args.lineup_pause_frames, 30)
+        self.assertEqual(args.lineup_motion_threshold, 0.10)
+        self.assertEqual(args.lineup_separation_threshold, 1.20)
+
     def test_reference_match_scores_similar_crop_higher(self) -> None:
         with TemporaryDirectory() as temp:
             reference_path = Path(temp) / "gabriel.png"
