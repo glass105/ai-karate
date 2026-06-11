@@ -1,3 +1,4 @@
 -r requirements-rtm.txt
 boxmot==20.0.0
 insightface==0.7.3
+deepface>=0.0.93,<0.1

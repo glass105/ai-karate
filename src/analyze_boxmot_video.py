@@ -75,6 +75,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-min-reference-match-score", default=0.05, type=float)
     parser.add_argument("--fighter-a-min-exclude-reference-match-score", default=0.80, type=float)
     parser.add_argument("--fighter-a-enable-face-match", action="store_true")
+    parser.add_argument(
+        "--face-match-backend",
+        choices=("insightface", "deepface-arcface"),
+        default="insightface",
+        help="Face embedding backend used for ROI-filtered fighter candidate identity checks.",
+    )
+    parser.add_argument(
+        "--deepface-detector-backend",
+        default="opencv",
+        help="DeepFace detector backend used when --face-match-backend deepface-arcface is selected.",
+    )
     parser.add_argument("--fighter-a-reject-face-mismatch", action="store_true")
     parser.add_argument("--fighter-a-min-face-match-score", default=0.25, type=float)
     parser.add_argument("--fighter-a-min-red-glove-score", default=0.15, type=float)
@@ -481,12 +492,24 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         args.fighter_a_exclude_reference_images
     )
     face_matcher = None
+    exclude_face_matcher = None
     face_reference_count = 0
+    exclude_face_reference_count = 0
     if args.fighter_a_enable_face_match:
         from src.face_identity import FaceMatcher
 
-        face_matcher = FaceMatcher(args.fighter_a_reference_images)
+        face_matcher = FaceMatcher(
+            args.fighter_a_reference_images,
+            backend=args.face_match_backend,
+            detector_backend=args.deepface_detector_backend,
+        )
         face_reference_count = face_matcher.reference_count
+        exclude_face_matcher = FaceMatcher(
+            args.fighter_a_exclude_reference_images,
+            backend=args.face_match_backend,
+            detector_backend=args.deepface_detector_backend,
+        )
+        exclude_face_reference_count = exclude_face_matcher.reference_count
     tracker = build_tracker(args.tracker, args.reid_weights)
     needs_yolo_detector = args.pose_backend in {"yolo", "yolo-rtmw"} or (
         args.pose_backend in {"rtmpose", "rtmw"} and args.rtm_detector_backend == "yolo"
@@ -548,7 +571,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         expect_face_match=face_reference_count > 0,
         require_reference_match=args.fighter_a_require_reference_match,
         reject_face_mismatch=args.fighter_a_reject_face_mismatch and face_reference_count > 0,
-        reject_exclude_reference_match=bool(exclude_reference_descriptors),
+        reject_exclude_reference_match=bool(exclude_reference_descriptors) or exclude_face_reference_count > 0,
         min_red_glove_score=args.fighter_a_min_red_glove_score,
         min_white_glove_score=args.fighter_a_min_white_glove_score,
         min_standing_score=args.fighter_a_min_standing_score,
@@ -622,9 +645,22 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     face_score, face_detected = face_matcher.match_candidate(frame, candidate["box"])
                     candidate["face_match_score"] = face_score
                     candidate["face_detected"] = face_detected
+                    if exclude_face_matcher is not None:
+                        exclude_face_score, exclude_face_detected = exclude_face_matcher.match_candidate(
+                            frame,
+                            candidate["box"],
+                        )
+                        candidate["exclude_face_match_score"] = exclude_face_score
+                        candidate["exclude_face_detected"] = exclude_face_detected
+                        candidate["exclude_reference_match_score"] = max(
+                            candidate["exclude_reference_match_score"],
+                            exclude_face_score,
+                        )
                 else:
                     candidate["face_match_score"] = 0.0
                     candidate["face_detected"] = False
+                    candidate["exclude_face_match_score"] = 0.0
+                    candidate["exclude_face_detected"] = False
             tracked = attach_tracks(candidates, tracker.update(detections_array(candidates), frame))
             tracked_identity_boxes = [identity_box(candidate, frame) for candidate in tracked]
             selected_track_id = identity.observe(tracked_identity_boxes)
@@ -781,8 +817,11 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "exclude_reference_image_count": len(exclude_reference_descriptors),
             "pose_reference_count": len(pose_reference_descriptors_list),
             "face_reference_count": face_reference_count,
+            "exclude_face_reference_count": exclude_face_reference_count,
             "require_reference_match": args.fighter_a_require_reference_match,
             "face_match": args.fighter_a_enable_face_match,
+            "face_match_backend": args.face_match_backend,
+            "deepface_detector_backend": args.deepface_detector_backend,
             "reject_face_mismatch": args.fighter_a_reject_face_mismatch and face_reference_count > 0,
             "min_red_glove_score": args.fighter_a_min_red_glove_score,
             "min_white_glove_score": args.fighter_a_min_white_glove_score,

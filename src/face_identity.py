@@ -12,7 +12,25 @@ import numpy as np
 class FaceMatcher:
     """Compare candidate faces against reference face embeddings."""
 
-    def __init__(self, reference_paths: list[Path], *, detection_size: tuple[int, int] = (640, 640)) -> None:
+    def __init__(
+        self,
+        reference_paths: list[Path],
+        *,
+        backend: str = "insightface",
+        detection_size: tuple[int, int] = (640, 640),
+        detector_backend: str = "opencv",
+    ) -> None:
+        self.backend = backend
+        self.detector_backend = detector_backend
+        if backend == "deepface-arcface":
+            self._init_deepface()
+        elif backend == "insightface":
+            self._init_insightface(detection_size)
+        else:
+            raise ValueError(f"Unsupported face match backend: {backend}")
+        self._references = self._load_references(reference_paths)
+
+    def _init_insightface(self, detection_size: tuple[int, int]) -> None:
         try:
             from insightface.app import FaceAnalysis
         except ImportError as exc:
@@ -22,7 +40,18 @@ class FaceMatcher:
 
         self._app = FaceAnalysis(name="buffalo_l", providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
         self._app.prepare(ctx_id=0, det_size=detection_size)
-        self._references = self._load_references(reference_paths)
+        self._deepface = None
+
+    def _init_deepface(self) -> None:
+        try:
+            from deepface import DeepFace
+        except ImportError as exc:
+            raise RuntimeError(
+                "DeepFace ArcFace matching requires deepface. Install requirements-boxmot.txt on the pod."
+            ) from exc
+
+        self._app = None
+        self._deepface = DeepFace
 
     @property
     def reference_count(self) -> int:
@@ -32,6 +61,8 @@ class FaceMatcher:
         crop = _crop(frame, box)
         if crop is None:
             return 0.0, False
+        if self.backend == "deepface-arcface":
+            return self._match_deepface(crop)
         faces = self._app.get(crop)
         if not faces:
             return 0.0, False
@@ -44,18 +75,59 @@ class FaceMatcher:
         ]
         return max(scores, default=0.0), True
 
+    def _match_deepface(self, crop: Any) -> tuple[float, bool]:
+        embeddings = self._deepface_embeddings(crop)
+        if not embeddings:
+            return 0.0, False
+        if not self._references:
+            return 0.0, True
+        scores = [
+            _cosine_similarity(embedding, reference)
+            for embedding in embeddings
+            for reference in self._references
+        ]
+        return max(scores, default=0.0), True
+
     def _load_references(self, paths: list[Path]) -> list[np.ndarray]:
         references = []
         for path in reference_image_paths(paths):
             image = cv2.imread(str(path))
             if image is None:
                 continue
-            faces = self._app.get(image)
-            if not faces:
-                continue
-            face = max(faces, key=lambda item: _face_area(item))
-            references.append(_normalized_embedding(face))
+            if self.backend == "deepface-arcface":
+                embeddings = self._deepface_embeddings(image)
+                if embeddings:
+                    references.append(embeddings[0])
+            else:
+                faces = self._app.get(image)
+                if not faces:
+                    continue
+                face = max(faces, key=lambda item: _face_area(item))
+                references.append(_normalized_embedding(face))
         return references
+
+    def _deepface_embeddings(self, image: Any) -> list[np.ndarray]:
+        try:
+            representations = self._deepface.represent(
+                img_path=image,
+                model_name="ArcFace",
+                detector_backend=self.detector_backend,
+                enforce_detection=False,
+                align=True,
+            )
+        except Exception:
+            return []
+        if isinstance(representations, dict):
+            representations = [representations]
+        embeddings = []
+        for representation in representations or []:
+            confidence = float(representation.get("face_confidence", 0.0) or 0.0)
+            if confidence <= 0.0:
+                continue
+            embedding = np.asarray(representation.get("embedding", []), dtype=np.float32)
+            if embedding.size:
+                embeddings.append(_normalize_vector(embedding))
+        return embeddings
 
 
 def reference_image_paths(paths: list[Path]) -> list[Path]:
@@ -82,6 +154,10 @@ def _crop(frame: Any, box: tuple[int, int, int, int]) -> Any | None:
 
 def _normalized_embedding(face: Any) -> np.ndarray:
     embedding = np.asarray(face.normed_embedding if hasattr(face, "normed_embedding") else face.embedding)
+    return _normalize_vector(embedding)
+
+
+def _normalize_vector(embedding: np.ndarray) -> np.ndarray:
     norm = np.linalg.norm(embedding)
     if not norm:
         return embedding

@@ -196,6 +196,33 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.lineup_pause_frames, 30)
         self.assertEqual(args.lineup_motion_threshold, 0.10)
         self.assertEqual(args.lineup_separation_threshold, 1.20)
+        self.assertEqual(args.face_match_backend, "insightface")
+        self.assertEqual(args.deepface_detector_backend, "opencv")
+
+    def test_accepts_deepface_arcface_backend(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--input",
+                "input.mp4",
+                "--output-dir",
+                "out",
+                "--pose-backend",
+                "rtmw",
+                "--tracker",
+                "boosttrack",
+                "--fighter-a-enable-face-match",
+                "--face-match-backend",
+                "deepface-arcface",
+                "--deepface-detector-backend",
+                "retinaface",
+            ]
+        )
+
+        self.assertTrue(args.fighter_a_enable_face_match)
+        self.assertEqual(args.face_match_backend, "deepface-arcface")
+        self.assertEqual(args.deepface_detector_backend, "retinaface")
 
     def test_reference_match_scores_similar_crop_higher(self) -> None:
         with TemporaryDirectory() as temp:
