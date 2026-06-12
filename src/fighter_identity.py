@@ -126,6 +126,11 @@ class FighterIdentity:
         lineup_pause_frames: int = 30,
         lineup_motion_threshold: float = 0.10,
         lineup_separation_threshold: float = 1.20,
+        locked_fighter_exclude_grace_score: float = 0.96,
+        locked_fighter_min_continuity_score: float = 0.60,
+        locked_fighter_drop_confirmation_frames: int = 10,
+        identity_switch_confirmation_frames: int | None = None,
+        confirmed_lock_min_frames: int = 30,
     ) -> None:
         if fighter_a_start not in {"left", "right"}:
             raise ValueError("fighter_a_start must be 'left' or 'right'")
@@ -135,6 +140,12 @@ class FighterIdentity:
             raise ValueError("fighter_candidate_limit must be at least 1")
         if lineup_pause_frames < 1:
             raise ValueError("lineup_pause_frames must be at least 1")
+        if locked_fighter_drop_confirmation_frames < 1:
+            raise ValueError("locked_fighter_drop_confirmation_frames must be at least 1")
+        if identity_switch_confirmation_frames is not None and identity_switch_confirmation_frames < 1:
+            raise ValueError("identity_switch_confirmation_frames must be at least 1")
+        if confirmed_lock_min_frames < 1:
+            raise ValueError("confirmed_lock_min_frames must be at least 1")
         self.fighter_a_name = fighter_a_name
         self.fighter_a_start = fighter_a_start
         self.recovery_threshold = recovery_threshold
@@ -168,6 +179,15 @@ class FighterIdentity:
         self.lineup_pause_frames = lineup_pause_frames
         self.lineup_motion_threshold = lineup_motion_threshold
         self.lineup_separation_threshold = lineup_separation_threshold
+        self.locked_fighter_exclude_grace_score = locked_fighter_exclude_grace_score
+        self.locked_fighter_min_continuity_score = locked_fighter_min_continuity_score
+        self.locked_fighter_drop_confirmation_frames = locked_fighter_drop_confirmation_frames
+        self.identity_switch_confirmation_frames = (
+            identity_switch_confirmation_frames
+            if identity_switch_confirmation_frames is not None
+            else recovery_confirmation_frames
+        )
+        self.confirmed_lock_min_frames = confirmed_lock_min_frames
         self.fighter_a_track_id: int | None = None
         self.fighter_a_track_ids: set[int] = set()
         self.recovery_count = 0
@@ -187,6 +207,9 @@ class FighterIdentity:
         self._visual_track_id: int | None = None
         self._visual_box: TrackedBox | None = None
         self._visual_tentative = False
+        self._lock_frames = 0
+        self._drop_reason: str | None = None
+        self._drop_frames = 0
 
     def observe(self, boxes: Iterable[TrackedBox]) -> int | None:
         boxes = list(boxes)
@@ -226,10 +249,13 @@ class FighterIdentity:
             (box for box in foreground if box.track_id == self.fighter_a_track_id),
             None,
         )
-        if current is not None and self._is_plausible(current):
-            self._accept(current)
-            self._mark_visual(current, tentative=False)
-            return current.track_id
+        if current is not None:
+            current_reason = self._rejection_reason(current, {box.track_id for box in active_fighters})
+            if self._should_keep_current_lock(current, current_reason):
+                keep_drop_pending = current_reason in {"exclude_reference", "face_mismatch"}
+                self._accept(current, clear_drop_pending=not keep_drop_pending)
+                self._mark_visual(current, tentative=False)
+                return current.track_id
 
         self._missing_frames += 1
         self._visible_track_id = None
@@ -273,7 +299,12 @@ class FighterIdentity:
         else:
             self._pending_track_id = selected.track_id
             self._pending_frames = 1
-        if self._pending_frames < self.recovery_confirmation_frames:
+        required_confirmation_frames = (
+            self.identity_switch_confirmation_frames
+            if selected.track_id != self.fighter_a_track_id
+            else self.recovery_confirmation_frames
+        )
+        if self._pending_frames < required_confirmation_frames:
             self._mark_visual(selected, tentative=True)
             return None
         if selected.track_id != self.fighter_a_track_id:
@@ -316,7 +347,32 @@ class FighterIdentity:
             return True
         return self._match_score(box) <= self.recovery_threshold
 
-    def _accept(self, box: TrackedBox) -> None:
+    def _should_keep_current_lock(self, box: TrackedBox, reason: str) -> bool:
+        if reason in {"", "red_below_threshold_continuity_ok", "exclude_reference_locked_ok"}:
+            self._clear_drop_pending()
+            return self._is_positionally_plausible(box)
+        if reason == "red_below_threshold":
+            self._clear_drop_pending()
+            return self._is_positionally_plausible(box)
+        if reason in {"blue_glove", "not_standing", "reference_below_threshold"}:
+            self._clear_drop_pending()
+            return False
+        if reason not in {"exclude_reference", "face_mismatch"}:
+            self._clear_drop_pending()
+            return False
+        if self._lock_frames < self.confirmed_lock_min_frames:
+            self._mark_drop_pending(reason)
+            return True
+        self._mark_drop_pending(reason)
+        return self._drop_frames < self.locked_fighter_drop_confirmation_frames
+
+    def _is_positionally_plausible(self, box: TrackedBox) -> bool:
+        if self._last_observation is None:
+            return True
+        return self._match_score(box) <= self.recovery_threshold
+
+    def _accept(self, box: TrackedBox, *, clear_drop_pending: bool = True) -> None:
+        previous_track_id = self.fighter_a_track_id
         if self._last_observation is not None:
             movement = (
                 box.center_x - self._last_observation.center_x,
@@ -331,6 +387,9 @@ class FighterIdentity:
         self.fighter_a_track_ids.add(box.track_id)
         self._last_observation = box
         self._missing_frames = 0
+        self._lock_frames = self._lock_frames + 1 if previous_track_id == box.track_id else 1
+        if clear_drop_pending:
+            self._clear_drop_pending()
         self._clear_pending()
         self._mark_visual(box, tentative=False)
         if box.appearance:
@@ -381,6 +440,17 @@ class FighterIdentity:
     def _clear_pending(self) -> None:
         self._pending_track_id = None
         self._pending_frames = 0
+
+    def _clear_drop_pending(self) -> None:
+        self._drop_reason = None
+        self._drop_frames = 0
+
+    def _mark_drop_pending(self, reason: str) -> None:
+        if self._drop_reason == reason:
+            self._drop_frames += 1
+        else:
+            self._drop_reason = reason
+            self._drop_frames = 1
 
     def _clear_visual(self) -> None:
         self._visual_track_id = None
@@ -554,14 +624,16 @@ class FighterIdentity:
     def _rejection_reason(self, box: TrackedBox, active_ids: set[int]) -> str:
         if box.track_id not in active_ids:
             return "not_active_fighter_pair"
-        if self._matches_exclude_reference(box):
-            return "exclude_reference"
         if self.reject_blue_gloves and box.blue_glove_score >= max(box.red_glove_score, box.white_glove_score):
             return "blue_glove"
         if self.require_standing and box.standing_score < self.min_standing_score:
             return "not_standing"
         if self.reject_face_mismatch and box.face_detected and box.face_match_score < self.min_face_match_score:
             return "face_mismatch"
+        if self._matches_exclude_reference(box):
+            if box.track_id == self.fighter_a_track_id and self._locked_exclude_reference_is_allowed(box):
+                return "exclude_reference_locked_ok"
+            return "exclude_reference"
         if self.require_reference_match and box.reference_match_score < self.min_reference_match_score:
             return "reference_below_threshold"
         if self.require_red_gloves and box.red_glove_score < self.min_red_glove_score:
@@ -584,6 +656,15 @@ class FighterIdentity:
             self.reject_exclude_reference_match
             and box.exclude_reference_match_score >= self.min_exclude_reference_match_score
         )
+
+    def _locked_exclude_reference_is_allowed(self, box: TrackedBox) -> bool:
+        if box.track_id != self.fighter_a_track_id:
+            return False
+        if self._lock_frames < self.confirmed_lock_min_frames:
+            return True
+        if box.exclude_reference_match_score < self.locked_fighter_exclude_grace_score:
+            return True
+        return self._continuity_score(box) >= self.locked_fighter_min_continuity_score
 
     def _has_exclude_reference_reject(self, boxes: list[TrackedBox]) -> bool:
         return any(

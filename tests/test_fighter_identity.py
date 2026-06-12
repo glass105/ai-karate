@@ -383,20 +383,44 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertIsNone(identity.visual_track_id)
         self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference")
 
-    def test_exclude_reference_match_drops_existing_lock(self) -> None:
+    def test_exclude_reference_match_does_not_immediately_drop_existing_lock(self) -> None:
         identity = FighterIdentity(
             "Gabriel",
             "left",
             reject_exclude_reference_match=True,
             min_exclude_reference_match_score=0.75,
+            locked_fighter_exclude_grace_score=0.95,
+            locked_fighter_drop_confirmation_frames=3,
+            confirmed_lock_min_frames=1,
         )
         identity.observe([TrackedBox(10, 100, 0, 300, 400, exclude_reference_match_score=0.1)])
 
         selected = identity.observe([TrackedBox(10, 102, 0, 302, 400, exclude_reference_match_score=0.9)])
 
-        self.assertIsNone(selected)
+        self.assertEqual(selected, 10)
+        self.assertEqual(identity.label(10), "Gabriel")
+        self.assertEqual(identity.visual_track_id, 10)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference_locked_ok")
+
+    def test_repeated_strong_exclude_with_weak_continuity_drops_existing_lock(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_exclude_reference_match=True,
+            min_exclude_reference_match_score=0.75,
+            locked_fighter_exclude_grace_score=0.95,
+            locked_fighter_min_continuity_score=0.99,
+            locked_fighter_drop_confirmation_frames=2,
+            confirmed_lock_min_frames=1,
+        )
+        identity.observe([TrackedBox(10, 100, 0, 300, 400, exclude_reference_match_score=0.1)])
+
+        first = identity.observe([TrackedBox(10, 500, 0, 700, 400, exclude_reference_match_score=0.99)])
+        second = identity.observe([TrackedBox(10, 500, 0, 700, 400, exclude_reference_match_score=0.99)])
+
+        self.assertEqual(first, 10)
+        self.assertIsNone(second)
         self.assertEqual(identity.label(10), "fighter-10")
-        self.assertIsNone(identity.visual_track_id)
         self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference")
 
     def test_lineup_pause_reanchors_to_initial_left_side(self) -> None:

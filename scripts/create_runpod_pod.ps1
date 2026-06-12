@@ -87,7 +87,7 @@ if [ ! -x "`$venv/bin/python" ]; then
 fi
 "`$venv/bin/python" -m pip install --upgrade pip
 "`$venv/bin/python" -m pip install --upgrade torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu128
-"`$venv/bin/python" -m pip install --no-cache-dir -r requirements.txt "lap>=0.5.12,<1"
+"`$venv/bin/python" -m pip install --no-cache-dir -r requirements-boxmot.txt "lap>=0.5.12,<1"
 "`$venv/bin/python" -m pip uninstall -y onnxruntime
 "`$venv/bin/python" -m pip install --no-cache-dir --force-reinstall onnxruntime-gpu==1.23.2
 "`$venv/bin/python" -c "import torch; assert torch.cuda.is_available(), 'CUDA is not available to PyTorch'; print(f'CUDA ready: {torch.cuda.get_device_name(0)}')"

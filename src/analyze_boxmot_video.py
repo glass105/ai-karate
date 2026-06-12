@@ -98,6 +98,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lineup-pause-frames", default=30, type=int)
     parser.add_argument("--lineup-motion-threshold", default=0.10, type=float)
     parser.add_argument("--lineup-separation-threshold", default=1.20, type=float)
+    parser.add_argument("--locked-fighter-exclude-grace-score", default=0.96, type=float)
+    parser.add_argument("--locked-fighter-min-continuity-score", default=0.60, type=float)
+    parser.add_argument("--locked-fighter-drop-confirmation-frames", default=10, type=int)
+    parser.add_argument("--identity-switch-confirmation-frames", default=12, type=int)
+    parser.add_argument("--confirmed-lock-min-frames", default=30, type=int)
     parser.add_argument("--arena-roi", default="0.2,0.1,0.8,0.9")
     parser.add_argument("--confidence", default=0.35, type=float)
     parser.add_argument("--keypoint-threshold", default=0.35, type=float)
@@ -584,6 +589,11 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         lineup_pause_frames=args.lineup_pause_frames,
         lineup_motion_threshold=args.lineup_motion_threshold,
         lineup_separation_threshold=args.lineup_separation_threshold,
+        locked_fighter_exclude_grace_score=args.locked_fighter_exclude_grace_score,
+        locked_fighter_min_continuity_score=args.locked_fighter_min_continuity_score,
+        locked_fighter_drop_confirmation_frames=args.locked_fighter_drop_confirmation_frames,
+        identity_switch_confirmation_frames=args.identity_switch_confirmation_frames,
+        confirmed_lock_min_frames=args.confirmed_lock_min_frames,
     )
     frame_count = 0
     gabriel_frames = 0
@@ -835,6 +845,11 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "lineup_pause_frames": args.lineup_pause_frames,
             "lineup_motion_threshold": args.lineup_motion_threshold,
             "lineup_separation_threshold": args.lineup_separation_threshold,
+            "locked_fighter_exclude_grace_score": args.locked_fighter_exclude_grace_score,
+            "locked_fighter_min_continuity_score": args.locked_fighter_min_continuity_score,
+            "locked_fighter_drop_confirmation_frames": args.locked_fighter_drop_confirmation_frames,
+            "identity_switch_confirmation_frames": args.identity_switch_confirmation_frames,
+            "confirmed_lock_min_frames": args.confirmed_lock_min_frames,
         },
         "arena_roi": roi,
         "gabriel_frames": gabriel_frames,

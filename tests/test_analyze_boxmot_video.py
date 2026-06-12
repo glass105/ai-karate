@@ -196,6 +196,11 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.lineup_pause_frames, 30)
         self.assertEqual(args.lineup_motion_threshold, 0.10)
         self.assertEqual(args.lineup_separation_threshold, 1.20)
+        self.assertEqual(args.locked_fighter_exclude_grace_score, 0.96)
+        self.assertEqual(args.locked_fighter_min_continuity_score, 0.60)
+        self.assertEqual(args.locked_fighter_drop_confirmation_frames, 10)
+        self.assertEqual(args.identity_switch_confirmation_frames, 12)
+        self.assertEqual(args.confirmed_lock_min_frames, 30)
         self.assertEqual(args.face_match_backend, "insightface")
         self.assertEqual(args.deepface_detector_backend, "opencv")
 
