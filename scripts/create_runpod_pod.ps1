@@ -1,6 +1,6 @@
 param(
     [switch]$Deploy,
-    [ValidateSet("bytetrack", "botsort")]
+    [ValidateSet("bytetrack", "botsort", "ocsort", "deepocsort", "hybridsort", "strongsort", "boosttrack")]
     [string]$TrackerName,
     [string]$ExperimentName,
     [string[]]$GpuTypeIds
@@ -42,8 +42,8 @@ $tracker = if ($TrackerName) {
     "bytetrack"
 }
 
-if ($tracker -notin @("bytetrack", "botsort")) {
-    throw "Set RUNPOD_TRACKER to either bytetrack or botsort."
+if ($tracker -notin @("bytetrack", "botsort", "ocsort", "deepocsort", "hybridsort", "strongsort", "boosttrack")) {
+    throw "Set RUNPOD_TRACKER to bytetrack, botsort, or a supported BoxMOT tracker."
 }
 
 $storageType = if ($env:RUNPOD_NETWORK_VOLUME_ID) {
@@ -69,14 +69,22 @@ $publicKeyPath = if ($env:RUNPOD_PUBLIC_KEY_FILE) {
     Join-Path $env:USERPROFILE ".ssh\ai_karate_runpod_ed25519.pub"
 }
 
+$gitRef = if ($env:RUNPOD_GIT_REF) {
+    $env:RUNPOD_GIT_REF
+} else {
+    git -C $repoRoot rev-parse --abbrev-ref HEAD
+}
+
 $bootstrapCommand = @"
 set -e
 /start.sh &
 start_pid=`$!
 if [ ! -d /workspace/ai-karate/.git ]; then
-  git clone https://github.com/glass105/ai-karate.git /workspace/ai-karate
+  git clone --branch "$gitRef" https://github.com/glass105/ai-karate.git /workspace/ai-karate
 else
-  git -C /workspace/ai-karate pull --ff-only
+  git -C /workspace/ai-karate fetch origin "$gitRef"
+  git -C /workspace/ai-karate checkout "$gitRef"
+  git -C /workspace/ai-karate pull --ff-only origin "$gitRef"
 fi
 cd /workspace/ai-karate
 mkdir -p models runs videos/input videos/output
