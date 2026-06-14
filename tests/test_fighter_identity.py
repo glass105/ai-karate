@@ -134,6 +134,53 @@ class FighterIdentityTests(unittest.TestCase):
 
         self.assertIsNone(selected)
 
+    def test_requires_blue_gloves_for_initial_assignment(self) -> None:
+        identity = FighterIdentity("Gabriel", "left", require_blue_gloves=True, min_blue_glove_score=0.3)
+
+        selected = identity.observe([TrackedBox(10, 100, 0, 200, 100, blue_glove_score=0.1)])
+
+        self.assertIsNone(selected)
+
+    def test_blue_glove_cue_prefers_visual_match(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            expect_blue_gloves=True,
+            require_blue_gloves=True,
+            min_blue_glove_score=0.3,
+            recovery_confirmation_frames=1,
+        )
+        identity.observe([TrackedBox(10, 100, 0, 200, 100, blue_glove_score=1.0)])
+
+        selected = identity.observe(
+            [
+                TrackedBox(20, 110, 0, 210, 100, blue_glove_score=0.1),
+                TrackedBox(30, 120, 0, 220, 100, blue_glove_score=0.8),
+            ]
+        )
+
+        self.assertEqual(selected, 30)
+
+    def test_rejects_non_target_glove_color(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            require_blue_gloves=True,
+            reject_red_gloves=True,
+            min_blue_glove_score=0.2,
+            recovery_confirmation_frames=1,
+        )
+
+        selected = identity.observe(
+            [
+                TrackedBox(10, 100, 0, 300, 400, blue_glove_score=0.9, red_glove_score=0.1),
+                TrackedBox(20, 500, 0, 700, 400, blue_glove_score=0.2, red_glove_score=0.8),
+            ]
+        )
+
+        self.assertEqual(selected, 10)
+        self.assertEqual(identity.identity_scores[20].rejection_reason, "red_glove")
+
     def test_rejects_blue_gloves_during_recovery(self) -> None:
         identity = FighterIdentity(
             "Gabriel",

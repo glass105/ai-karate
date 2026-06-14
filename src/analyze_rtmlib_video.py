@@ -68,12 +68,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-start", choices=("left", "right"), default="left")
     parser.add_argument("--fighter-a-black-belt", action="store_true")
     parser.add_argument("--fighter-a-taller", action="store_true")
+    parser.add_argument(
+        "--fighter-a-glove-color",
+        choices=("red", "white", "blue", "none"),
+        default="red",
+        help="Expected Gabriel glove color for this run. The selected color is required for initial lock/reset.",
+    )
     parser.add_argument("--fighter-a-require-red-gloves", action="store_true")
     parser.add_argument("--fighter-a-require-white-gloves", action="store_true")
+    parser.add_argument("--fighter-a-require-blue-gloves", action="store_true")
+    parser.add_argument("--fighter-a-reject-red-gloves", action="store_true")
+    parser.add_argument("--fighter-a-reject-white-gloves", action="store_true")
     parser.add_argument("--fighter-a-reject-blue-gloves", action="store_true")
     parser.add_argument("--fighter-a-require-standing", action="store_true")
     parser.add_argument("--fighter-a-min-red-glove-score", default=0.15, type=float)
     parser.add_argument("--fighter-a-min-white-glove-score", default=0.02, type=float)
+    parser.add_argument("--fighter-a-min-blue-glove-score", default=0.15, type=float)
     parser.add_argument("--fighter-a-min-standing-score", default=0.45, type=float)
     parser.add_argument("--reset-to-start-side-after-missing", default=10, type=int)
     parser.add_argument("--identity-recovery-confirmation-frames", default=3, type=int)
@@ -84,6 +94,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--arena-roi", default="0.2,0.1,0.8,0.9")
     parser.add_argument("--keypoint-threshold", default=0.35, type=float)
     return parser
+
+
+def glove_color_settings(args: argparse.Namespace) -> dict[str, bool]:
+    target = args.fighter_a_glove_color
+    return {
+        "expect_red": target == "red" or args.fighter_a_require_red_gloves,
+        "expect_white": target == "white" or args.fighter_a_require_white_gloves,
+        "expect_blue": target == "blue" or args.fighter_a_require_blue_gloves,
+        "require_red": target == "red" or args.fighter_a_require_red_gloves,
+        "require_white": target == "white" or args.fighter_a_require_white_gloves,
+        "require_blue": target == "blue" or args.fighter_a_require_blue_gloves,
+        "reject_red": args.fighter_a_reject_red_gloves,
+        "reject_white": args.fighter_a_reject_white_gloves,
+        "reject_blue": args.fighter_a_reject_blue_gloves,
+    }
 
 
 def parse_roi(value: str) -> tuple[float, float, float, float]:
@@ -291,20 +316,26 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     writer = cv2.VideoWriter(str(output_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
     tracker = PoseTracker()
     counter = StrikeCounter(fps=fps)
+    glove_settings = glove_color_settings(args)
     identity = FighterIdentity(
         args.fighter_a_name,
         args.fighter_a_start,
-        expect_red_gloves=True,
-        expect_white_gloves=args.fighter_a_require_white_gloves,
+        expect_red_gloves=glove_settings["expect_red"],
+        expect_white_gloves=glove_settings["expect_white"],
+        expect_blue_gloves=glove_settings["expect_blue"],
         expect_white_uniform=True,
         expect_black_belt=args.fighter_a_black_belt,
         expect_taller=args.fighter_a_taller,
-        require_red_gloves=args.fighter_a_require_red_gloves,
-        require_white_gloves=args.fighter_a_require_white_gloves,
-        reject_blue_gloves=args.fighter_a_reject_blue_gloves,
+        require_red_gloves=glove_settings["require_red"],
+        require_white_gloves=glove_settings["require_white"],
+        require_blue_gloves=glove_settings["require_blue"],
+        reject_red_gloves=glove_settings["reject_red"],
+        reject_white_gloves=glove_settings["reject_white"],
+        reject_blue_gloves=glove_settings["reject_blue"],
         require_standing=args.fighter_a_require_standing,
         min_red_glove_score=args.fighter_a_min_red_glove_score,
         min_white_glove_score=args.fighter_a_min_white_glove_score,
+        min_blue_glove_score=args.fighter_a_min_blue_glove_score,
         min_standing_score=args.fighter_a_min_standing_score,
         reset_after_missing_frames=args.reset_to_start_side_after_missing,
         recovery_confirmation_frames=args.identity_recovery_confirmation_frames,
@@ -423,16 +454,22 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "fighter_a_cues": {
             "start_side": args.fighter_a_start,
             "white_uniform": True,
-            "red_gloves": True,
-            "white_gloves": args.fighter_a_require_white_gloves,
+            "glove_color": args.fighter_a_glove_color,
+            "red_gloves": glove_settings["expect_red"],
+            "white_gloves": glove_settings["expect_white"],
+            "blue_gloves": glove_settings["expect_blue"],
             "black_belt": args.fighter_a_black_belt,
             "taller_height": args.fighter_a_taller,
-            "require_red_gloves": args.fighter_a_require_red_gloves,
-            "require_white_gloves": args.fighter_a_require_white_gloves,
-            "reject_blue_gloves": args.fighter_a_reject_blue_gloves,
+            "require_red_gloves": glove_settings["require_red"],
+            "require_white_gloves": glove_settings["require_white"],
+            "require_blue_gloves": glove_settings["require_blue"],
+            "reject_red_gloves": glove_settings["reject_red"],
+            "reject_white_gloves": glove_settings["reject_white"],
+            "reject_blue_gloves": glove_settings["reject_blue"],
             "require_standing": args.fighter_a_require_standing,
             "min_red_glove_score": args.fighter_a_min_red_glove_score,
             "min_white_glove_score": args.fighter_a_min_white_glove_score,
+            "min_blue_glove_score": args.fighter_a_min_blue_glove_score,
             "min_standing_score": args.fighter_a_min_standing_score,
             "reset_to_start_side_after_missing_frames": args.reset_to_start_side_after_missing,
             "recovery_confirmation_frames": args.identity_recovery_confirmation_frames,

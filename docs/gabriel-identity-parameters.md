@@ -8,9 +8,16 @@ This note summarizes the primary parameters used to identify and track Gabriel i
 |---|---:|---|---|---|
 | `--arena-roi` | `0.2,0.1,0.8,0.9` | Only candidates inside this region are considered. | Smaller/tighter ROI if narrowed; fewer background mistakes, but more risk of losing Gabriel. | Wider ROI if expanded; catches more Gabriel movement, but more background people. |
 | `--fighter-candidate-limit` | `4` | Only the 4 largest foreground candidates are considered. | More candidates; may recover Gabriel but risks background people. | Fewer candidates; cleaner, but can miss Gabriel if he is partially detected. |
-| `--fighter-a-require-red-gloves` | on | Requires red gloves for initial lock/reset. | Boolean, not numeric. | Off would be looser and risk wrong IDs. |
+| `--fighter-a-glove-color` | `red` | Selects Gabriel's expected glove color for the run: `red`, `white`, `blue`, or `none`. The selected color is required for initial lock/reset. | Not numeric. | Not numeric. |
+| `--fighter-a-require-red-gloves` | selected when glove color is `red` | Requires red gloves for initial lock/reset. | Boolean, not numeric. | Off would be looser and risk wrong IDs. |
+| `--fighter-a-require-white-gloves` | selected when glove color is `white` | Requires white gloves for initial lock/reset. | Boolean, not numeric. | Off would be looser and risk wrong IDs. |
+| `--fighter-a-require-blue-gloves` | selected when glove color is `blue` | Requires blue gloves for initial lock/reset. | Boolean, not numeric. | Off would be looser and risk wrong IDs. |
 | `--fighter-a-min-red-glove-score` | `0.15` | Minimum red-at-hand/wrist score. | Stricter. Too high can remove Gabriel when gloves blur or occlude. | Looser. Too low can select red shirts/background. |
-| `--fighter-a-reject-blue-gloves` | on | Rejects visible blue-glove candidates. | Boolean. | Off would allow opponent confusion. |
+| `--fighter-a-min-white-glove-score` | `0.02` | Minimum white-at-hand/wrist score. | Stricter. Too high can remove Gabriel when white gloves blur or blend with the uniform. | Looser. Too low can confuse white gi sleeves for gloves. |
+| `--fighter-a-min-blue-glove-score` | `0.15` | Minimum blue-at-hand/wrist score. | Stricter. Too high can remove Gabriel when blue gloves blur or occlude. | Looser. Too low can select blue background/mat/signage. |
+| `--fighter-a-reject-red-gloves` | off unless passed | Rejects candidates whose strongest visible glove color is red. | Boolean. | Off avoids false rejects from mixed/blurred color evidence. |
+| `--fighter-a-reject-white-gloves` | off unless passed | Rejects candidates whose strongest visible glove color is white. | Boolean. | Off avoids false rejects from white sleeves/gi fabric near wrists. |
+| `--fighter-a-reject-blue-gloves` | off unless passed | Rejects candidates whose strongest visible glove color is blue. | Boolean. | Off allows blue-glove candidates; turn on when Gabriel is not wearing blue. |
 | `--fighter-a-require-standing` | on | Requires active standing fighter. | Boolean. | Off risks seated/referee/background people. |
 | `--fighter-a-min-standing-score` | `0.45` | Standing confidence threshold. | Stricter; may reject crouched/lunging Gabriel. | Looser; may include seated/non-fighter people. |
 | `--fighter-a-enable-face-match` | on | Enables Gabriel face matching. | Boolean. | Off removes a strong identity cue. |
@@ -38,6 +45,8 @@ These are the first parameters to tune when Gabriel tracking becomes erratic:
 
 ```text
 --fighter-a-min-red-glove-score
+--fighter-a-min-white-glove-score
+--fighter-a-min-blue-glove-score
 --fighter-a-min-face-match-score
 --fighter-a-min-exclude-face-match-score
 --fighter-a-min-exclude-body-match-score

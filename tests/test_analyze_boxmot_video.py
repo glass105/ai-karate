@@ -9,6 +9,7 @@ from src.analyze_boxmot_video import (
     attach_tracks,
     build_parser,
     detections_array,
+    glove_color_settings,
     load_reference_descriptors,
     patch_rtm_fp16_input,
     reference_match_score,
@@ -189,6 +190,9 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         )
 
         self.assertEqual(args.fighter_a_min_red_glove_score, 0.15)
+        self.assertEqual(args.fighter_a_glove_color, "red")
+        self.assertEqual(args.fighter_a_min_white_glove_score, 0.02)
+        self.assertEqual(args.fighter_a_min_blue_glove_score, 0.15)
         self.assertEqual(args.fighter_a_min_exclude_reference_match_score, 0.8)
         self.assertEqual(args.fighter_a_min_exclude_body_match_score, 0.95)
         self.assertEqual(args.fighter_a_min_exclude_face_match_score, 0.45)
@@ -205,6 +209,58 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.confirmed_lock_min_frames, 30)
         self.assertEqual(args.face_match_backend, "insightface")
         self.assertEqual(args.deepface_detector_backend, "opencv")
+
+    def test_accepts_selected_glove_color_and_thresholds(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--input",
+                "input.mp4",
+                "--output-dir",
+                "out",
+                "--pose-backend",
+                "rtmw",
+                "--tracker",
+                "hybridsort",
+                "--fighter-a-glove-color",
+                "blue",
+                "--fighter-a-min-blue-glove-score",
+                "0.35",
+                "--fighter-a-min-white-glove-score",
+                "0.25",
+            ]
+        )
+
+        self.assertEqual(args.fighter_a_glove_color, "blue")
+        self.assertEqual(args.fighter_a_min_blue_glove_score, 0.35)
+        self.assertEqual(args.fighter_a_min_white_glove_score, 0.25)
+
+    def test_glove_color_selects_requirement_without_implicit_rejects(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--input",
+                "input.mp4",
+                "--output-dir",
+                "out",
+                "--pose-backend",
+                "rtmw",
+                "--tracker",
+                "hybridsort",
+                "--fighter-a-glove-color",
+                "blue",
+            ]
+        )
+        settings = glove_color_settings(args)
+
+        self.assertTrue(settings["require_blue"])
+        self.assertFalse(settings["require_red"])
+        self.assertFalse(settings["require_white"])
+        self.assertFalse(settings["reject_red"])
+        self.assertFalse(settings["reject_white"])
+        self.assertFalse(settings["reject_blue"])
 
     def test_accepts_deepface_arcface_backend(self) -> None:
         parser = build_parser()
