@@ -109,6 +109,7 @@ $body = @{
     cloudType         = "SECURE"
     computeType       = "GPU"
     gpuTypeIds        = @($(if ($GpuTypeIds) { $GpuTypeIds } else { $env:RUNPOD_GPU_ID }))
+    gpuTypePriority   = "custom"
     gpuCount          = 1
     containerDiskInGb = 40
     volumeInGb        = 50
