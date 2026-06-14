@@ -30,6 +30,9 @@ class TrackedBox:
     face_match_score: float = 0.0
     face_detected: bool = False
     exclude_reference_match_score: float = 0.0
+    exclude_body_match_score: float = 0.0
+    exclude_face_match_score: float = 0.0
+    exclude_face_detected: bool = False
 
     @property
     def center_x(self) -> float:
@@ -62,6 +65,9 @@ class IdentityScore:
     face_match_score: float
     face_detected: bool
     exclude_reference_score: float
+    exclude_body_score: float
+    exclude_face_score: float
+    exclude_face_detected: bool
     continuity_score: float
     reset_side_score: float
     match_gap: float
@@ -117,6 +123,8 @@ class FighterIdentity:
         min_reference_match_score: float = 0.05,
         min_face_match_score: float = 0.25,
         min_exclude_reference_match_score: float = 0.80,
+        min_exclude_body_match_score: float | None = None,
+        min_exclude_face_match_score: float = 0.45,
         reset_after_missing_frames: int = 10,
         recovery_confirmation_frames: int = 3,
         fighter_candidate_limit: int = 4,
@@ -170,6 +178,12 @@ class FighterIdentity:
         self.min_reference_match_score = min_reference_match_score
         self.min_face_match_score = min_face_match_score
         self.min_exclude_reference_match_score = min_exclude_reference_match_score
+        self.min_exclude_body_match_score = (
+            min_exclude_body_match_score
+            if min_exclude_body_match_score is not None
+            else min_exclude_reference_match_score
+        )
+        self.min_exclude_face_match_score = min_exclude_face_match_score
         self.reset_after_missing_frames = reset_after_missing_frames
         self.recovery_confirmation_frames = recovery_confirmation_frames
         self.fighter_candidate_limit = fighter_candidate_limit
@@ -607,6 +621,9 @@ class FighterIdentity:
                 face_match_score=box.face_match_score,
                 face_detected=box.face_detected,
                 exclude_reference_score=box.exclude_reference_match_score,
+                exclude_body_score=self._exclude_body_score(box),
+                exclude_face_score=box.exclude_face_match_score,
+                exclude_face_detected=box.exclude_face_detected,
                 continuity_score=continuity,
                 reset_side_score=reset_side_score,
                 match_gap=candidate_score - next_best_score,
@@ -652,13 +669,41 @@ class FighterIdentity:
         }
 
     def _matches_exclude_reference(self, box: TrackedBox) -> bool:
-        return (
-            self.reject_exclude_reference_match
-            and box.exclude_reference_match_score >= self.min_exclude_reference_match_score
-        )
+        if not self.reject_exclude_reference_match:
+            return False
+        if (
+            box.exclude_face_detected
+            and box.exclude_face_match_score >= self.min_exclude_face_match_score
+        ):
+            return True
+        return self._body_exclude_is_hard(box)
+
+    def _body_exclude_is_hard(self, box: TrackedBox) -> bool:
+        if self._exclude_body_score(box) < self.min_exclude_body_match_score:
+            return False
+        return not self._has_meaningful_gabriel_evidence(box)
+
+    def _exclude_body_score(self, box: TrackedBox) -> float:
+        if box.exclude_body_match_score > 0.0:
+            return box.exclude_body_match_score
+        return box.exclude_reference_match_score
+
+    def _has_meaningful_gabriel_evidence(self, box: TrackedBox) -> bool:
+        if box.red_glove_score >= self.min_red_glove_score:
+            return True
+        if box.face_detected and box.face_match_score >= self.min_face_match_score:
+            return True
+        if box.pose_reference_match_score >= 0.70:
+            return True
+        return self._has_strong_continuity(box)
 
     def _locked_exclude_reference_is_allowed(self, box: TrackedBox) -> bool:
         if box.track_id != self.fighter_a_track_id:
+            return False
+        if (
+            box.exclude_face_detected
+            and box.exclude_face_match_score >= self.min_exclude_face_match_score
+        ):
             return False
         if self._lock_frames < self.confirmed_lock_min_frames:
             return True

@@ -190,6 +190,8 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
 
         self.assertEqual(args.fighter_a_min_red_glove_score, 0.15)
         self.assertEqual(args.fighter_a_min_exclude_reference_match_score, 0.8)
+        self.assertEqual(args.fighter_a_min_exclude_body_match_score, 0.95)
+        self.assertEqual(args.fighter_a_min_exclude_face_match_score, 0.45)
         self.assertEqual(args.fighter_a_min_face_match_score, 0.25)
         self.assertEqual(args.identity_recovery_confirmation_frames, 3)
         self.assertEqual(args.reset_to_start_side_after_missing, 10)

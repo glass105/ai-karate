@@ -116,7 +116,7 @@ def draw_pose_candidates(
         draw_scores = candidate.get("draw_scores")
         if draw_points is None or draw_scores is None:
             continue
-        _draw_scored_lines(annotated, draw_points, draw_scores, FOOT_SKELETON, roi_box, score_threshold, (0, 180, 255), 3)
+        _draw_scored_lines(annotated, draw_points, draw_scores, FOOT_SKELETON, roi_box, score_threshold, (0, 180, 255), 1)
         _draw_scored_lines(
             annotated,
             draw_points,
@@ -127,12 +127,10 @@ def draw_pose_candidates(
             (0, 180, 255),
             1,
         )
-        foot_indices = {index for connection in FOOT_SKELETON for index in connection}
         for index, (point, score) in enumerate(zip(draw_points, draw_scores)):
             if score < score_threshold or not _point_inside_roi(point, roi_box):
                 continue
-            radius = 3 if index in foot_indices else 2
-            cv2.circle(annotated, (int(point[0]), int(point[1])), radius, (0, 180, 255), -1)
+            cv2.circle(annotated, (int(point[0]), int(point[1])), 2, (0, 180, 255), -1)
     return roi_box
 
 
