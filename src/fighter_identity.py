@@ -122,15 +122,19 @@ class FighterIdentity:
         expect_face_match: bool = False,
         reject_face_mismatch: bool = False,
         reject_exclude_reference_match: bool = False,
+        exclude_reference_hard_veto: bool = False,
+        exclude_veto_allow_strong_face_match: bool = False,
         min_red_glove_score: float = 0.15,
         min_white_glove_score: float = 0.02,
         min_blue_glove_score: float = 0.15,
         min_standing_score: float = 0.45,
         min_reference_match_score: float = 0.05,
         min_face_match_score: float = 0.25,
+        strong_face_match_score: float = 0.70,
         min_exclude_reference_match_score: float = 0.80,
         min_exclude_body_match_score: float | None = None,
         min_exclude_face_match_score: float = 0.45,
+        exclude_veto_confirmation_frames: int = 3,
         reset_after_missing_frames: int = 10,
         recovery_confirmation_frames: int = 3,
         fighter_candidate_limit: int = 4,
@@ -156,6 +160,8 @@ class FighterIdentity:
             raise ValueError("lineup_pause_frames must be at least 1")
         if locked_fighter_drop_confirmation_frames < 1:
             raise ValueError("locked_fighter_drop_confirmation_frames must be at least 1")
+        if exclude_veto_confirmation_frames < 1:
+            raise ValueError("exclude_veto_confirmation_frames must be at least 1")
         if identity_switch_confirmation_frames is not None and identity_switch_confirmation_frames < 1:
             raise ValueError("identity_switch_confirmation_frames must be at least 1")
         if confirmed_lock_min_frames < 1:
@@ -182,12 +188,15 @@ class FighterIdentity:
         self.expect_face_match = expect_face_match
         self.reject_face_mismatch = reject_face_mismatch
         self.reject_exclude_reference_match = reject_exclude_reference_match
+        self.exclude_reference_hard_veto = exclude_reference_hard_veto
+        self.exclude_veto_allow_strong_face_match = exclude_veto_allow_strong_face_match
         self.min_red_glove_score = min_red_glove_score
         self.min_white_glove_score = min_white_glove_score
         self.min_blue_glove_score = min_blue_glove_score
         self.min_standing_score = min_standing_score
         self.min_reference_match_score = min_reference_match_score
         self.min_face_match_score = min_face_match_score
+        self.strong_face_match_score = strong_face_match_score
         self.min_exclude_reference_match_score = min_exclude_reference_match_score
         self.min_exclude_body_match_score = (
             min_exclude_body_match_score
@@ -195,6 +204,7 @@ class FighterIdentity:
             else min_exclude_reference_match_score
         )
         self.min_exclude_face_match_score = min_exclude_face_match_score
+        self.exclude_veto_confirmation_frames = exclude_veto_confirmation_frames
         self.reset_after_missing_frames = reset_after_missing_frames
         self.recovery_confirmation_frames = recovery_confirmation_frames
         self.fighter_candidate_limit = fighter_candidate_limit
@@ -395,7 +405,12 @@ class FighterIdentity:
             self._mark_drop_pending(reason)
             return True
         self._mark_drop_pending(reason)
-        return self._drop_frames < self.locked_fighter_drop_confirmation_frames
+        confirmation_frames = (
+            self.exclude_veto_confirmation_frames
+            if reason == "exclude_reference" and self.exclude_reference_hard_veto
+            else self.locked_fighter_drop_confirmation_frames
+        )
+        return self._drop_frames < confirmation_frames
 
     def _is_positionally_plausible(self, box: TrackedBox) -> bool:
         if self._last_observation is None:
@@ -733,6 +748,8 @@ class FighterIdentity:
     def _body_exclude_is_hard(self, box: TrackedBox) -> bool:
         if self._exclude_body_score(box) < self.min_exclude_body_match_score:
             return False
+        if self.exclude_reference_hard_veto:
+            return not self._has_strong_gabriel_face_match(box)
         return not self._has_meaningful_gabriel_evidence(box)
 
     def _exclude_body_score(self, box: TrackedBox) -> float:
@@ -751,6 +768,13 @@ class FighterIdentity:
         if box.pose_reference_match_score >= 0.70:
             return True
         return self._has_strong_continuity(box)
+
+    def _has_strong_gabriel_face_match(self, box: TrackedBox) -> bool:
+        return (
+            self.exclude_veto_allow_strong_face_match
+            and box.face_detected
+            and box.face_match_score >= self.strong_face_match_score
+        )
 
     def _expected_glove_scores(self, box: TrackedBox) -> list[float]:
         scores = []
@@ -773,6 +797,8 @@ class FighterIdentity:
         return scores
 
     def _locked_exclude_reference_is_allowed(self, box: TrackedBox) -> bool:
+        if self.exclude_reference_hard_veto:
+            return False
         if box.track_id != self.fighter_a_track_id:
             return False
         if (

@@ -85,6 +85,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-min-exclude-reference-match-score", default=0.80, type=float)
     parser.add_argument("--fighter-a-min-exclude-body-match-score", default=0.95, type=float)
     parser.add_argument("--fighter-a-min-exclude-face-match-score", default=0.45, type=float)
+    parser.add_argument(
+        "--fighter-a-exclude-reference-hard-veto",
+        action="store_true",
+        help="Treat exclude reference matches as hard negatives that red/pose/continuity cannot rescue.",
+    )
+    parser.add_argument(
+        "--fighter-a-exclude-veto-confirmation-frames",
+        default=3,
+        type=int,
+        help="Consecutive exclude-veto frames before dropping an already locked Gabriel track.",
+    )
+    parser.add_argument(
+        "--fighter-a-exclude-allow-strong-face-match",
+        action="store_true",
+        help="Allow a strong Gabriel face match to override a body-only exclude match.",
+    )
     parser.add_argument("--fighter-a-enable-face-match", action="store_true")
     parser.add_argument(
         "--face-match-backend",
@@ -99,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--fighter-a-reject-face-mismatch", action="store_true")
     parser.add_argument("--fighter-a-min-face-match-score", default=0.25, type=float)
+    parser.add_argument("--fighter-a-strong-face-match-score", default=0.70, type=float)
     parser.add_argument("--fighter-a-min-red-glove-score", default=0.15, type=float)
     parser.add_argument("--fighter-a-min-white-glove-score", default=0.02, type=float)
     parser.add_argument("--fighter-a-min-blue-glove-score", default=0.15, type=float)
@@ -609,15 +626,19 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         require_reference_match=args.fighter_a_require_reference_match,
         reject_face_mismatch=args.fighter_a_reject_face_mismatch and face_reference_count > 0,
         reject_exclude_reference_match=bool(exclude_reference_descriptors) or exclude_face_reference_count > 0,
+        exclude_reference_hard_veto=args.fighter_a_exclude_reference_hard_veto,
+        exclude_veto_allow_strong_face_match=args.fighter_a_exclude_allow_strong_face_match,
         min_red_glove_score=args.fighter_a_min_red_glove_score,
         min_white_glove_score=args.fighter_a_min_white_glove_score,
         min_blue_glove_score=args.fighter_a_min_blue_glove_score,
         min_standing_score=args.fighter_a_min_standing_score,
         min_reference_match_score=args.fighter_a_min_reference_match_score,
         min_face_match_score=args.fighter_a_min_face_match_score,
+        strong_face_match_score=args.fighter_a_strong_face_match_score,
         min_exclude_reference_match_score=args.fighter_a_min_exclude_reference_match_score,
         min_exclude_body_match_score=args.fighter_a_min_exclude_body_match_score,
         min_exclude_face_match_score=args.fighter_a_min_exclude_face_match_score,
+        exclude_veto_confirmation_frames=args.fighter_a_exclude_veto_confirmation_frames,
         reset_after_missing_frames=args.reset_to_start_side_after_missing,
         recovery_confirmation_frames=args.identity_recovery_confirmation_frames,
         fighter_candidate_limit=args.fighter_candidate_limit,
@@ -897,9 +918,13 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "min_standing_score": args.fighter_a_min_standing_score,
             "min_reference_match_score": args.fighter_a_min_reference_match_score,
             "min_face_match_score": args.fighter_a_min_face_match_score,
+            "strong_face_match_score": args.fighter_a_strong_face_match_score,
             "min_exclude_reference_match_score": args.fighter_a_min_exclude_reference_match_score,
             "min_exclude_body_match_score": args.fighter_a_min_exclude_body_match_score,
             "min_exclude_face_match_score": args.fighter_a_min_exclude_face_match_score,
+            "exclude_reference_hard_veto": args.fighter_a_exclude_reference_hard_veto,
+            "exclude_veto_confirmation_frames": args.fighter_a_exclude_veto_confirmation_frames,
+            "exclude_allow_strong_face_match": args.fighter_a_exclude_allow_strong_face_match,
             "reset_to_start_side_after_missing_frames": args.reset_to_start_side_after_missing,
             "recovery_confirmation_frames": args.identity_recovery_confirmation_frames,
             "fighter_candidate_limit": args.fighter_candidate_limit,

@@ -472,6 +472,71 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertEqual(selected, 10)
         self.assertEqual(identity.identity_scores[10].rejection_reason, "")
 
+    def test_hard_veto_exclude_match_rejects_even_with_red_and_pose_evidence(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_exclude_reference_match=True,
+            exclude_reference_hard_veto=True,
+            min_exclude_body_match_score=0.75,
+            require_red_gloves=True,
+            min_red_glove_score=0.15,
+        )
+
+        selected = identity.observe(
+            [
+                TrackedBox(
+                    10,
+                    100,
+                    0,
+                    300,
+                    400,
+                    red_glove_score=0.40,
+                    pose_reference_match_score=0.90,
+                    exclude_reference_match_score=0.90,
+                    exclude_body_match_score=0.90,
+                ),
+                TrackedBox(20, 500, 0, 700, 400, red_glove_score=0.20),
+            ]
+        )
+
+        self.assertEqual(selected, 20)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference")
+        self.assertTrue(identity.identity_scores[10].hard_reject_active)
+
+    def test_hard_veto_body_exclude_can_be_overridden_by_strong_gabriel_face(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_exclude_reference_match=True,
+            exclude_reference_hard_veto=True,
+            exclude_veto_allow_strong_face_match=True,
+            strong_face_match_score=0.70,
+            min_exclude_body_match_score=0.75,
+            require_red_gloves=True,
+            min_red_glove_score=0.15,
+        )
+
+        selected = identity.observe(
+            [
+                TrackedBox(
+                    10,
+                    100,
+                    0,
+                    300,
+                    400,
+                    red_glove_score=0.40,
+                    face_detected=True,
+                    face_match_score=0.80,
+                    exclude_reference_match_score=0.90,
+                    exclude_body_match_score=0.90,
+                )
+            ]
+        )
+
+        self.assertEqual(selected, 10)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "")
+
     def test_exclude_reference_match_does_not_immediately_drop_existing_lock(self) -> None:
         identity = FighterIdentity(
             "Gabriel",
@@ -506,6 +571,27 @@ class FighterIdentityTests(unittest.TestCase):
 
         first = identity.observe([TrackedBox(10, 500, 0, 700, 400, exclude_reference_match_score=0.99)])
         second = identity.observe([TrackedBox(10, 500, 0, 700, 400, exclude_reference_match_score=0.99)])
+
+        self.assertEqual(first, 10)
+        self.assertIsNone(second)
+        self.assertEqual(identity.label(10), "fighter-10")
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference")
+
+    def test_hard_veto_drops_existing_lock_after_veto_confirmation_frames(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_exclude_reference_match=True,
+            exclude_reference_hard_veto=True,
+            min_exclude_reference_match_score=0.75,
+            exclude_veto_confirmation_frames=2,
+            locked_fighter_drop_confirmation_frames=10,
+            confirmed_lock_min_frames=1,
+        )
+        identity.observe([TrackedBox(10, 100, 0, 300, 400, exclude_reference_match_score=0.1)])
+
+        first = identity.observe([TrackedBox(10, 102, 0, 302, 400, exclude_reference_match_score=0.90)])
+        second = identity.observe([TrackedBox(10, 102, 0, 302, 400, exclude_reference_match_score=0.90)])
 
         self.assertEqual(first, 10)
         self.assertIsNone(second)

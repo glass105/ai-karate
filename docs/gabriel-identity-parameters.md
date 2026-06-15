@@ -26,8 +26,12 @@ This note summarizes the primary parameters used to identify and track Gabriel i
 | `--fighter-a-reject-face-mismatch` | on | Rejects visible faces that mismatch Gabriel. | Boolean. | Off makes face mismatch only informational. |
 | `--fighter-a-exclude-reference-images` | `reference/exclude` | Negative examples: never Gabriel. | More/better excludes help, but bad excludes can confuse body matching. | Fewer excludes reduce false rejection but allow known wrong people. |
 | `--fighter-a-min-exclude-face-match-score` | `0.45` | Face score needed to reject as excluded person. | Stricter; fewer false exclude rejections, but may miss excluded faces. | Looser; stronger blocking, but may reject Gabriel by face false match. |
-| `--fighter-a-min-exclude-body-match-score` | `0.95` | Body/crop exclude threshold. Now soft unless Gabriel evidence is weak. | Stricter; less likely Gabriel is hurt by crop similarity. | Looser; more likely exclude body crop fights Gabriel. |
+| `--fighter-a-min-exclude-body-match-score` | `0.95` | Body/crop exclude threshold. With hard veto on, this blocks candidates even if red/pose/continuity are strong. | Stricter; less likely Gabriel is hurt by crop similarity. | Looser; more aggressive blocking of known excluded people. |
 | `--fighter-a-min-exclude-reference-match-score` | `0.80` | Legacy/final exclude threshold. Still present for compatibility. | Stricter if used directly. | Looser if used directly. |
+| `--fighter-a-exclude-reference-hard-veto` | off unless passed | Makes exclude references a true hard-negative rule. Red gloves, pose match, and tracker continuity cannot rescue an excluded candidate. | Boolean. | Off keeps legacy soft body-exclude behavior. |
+| `--fighter-a-exclude-veto-confirmation-frames` | `3` | Consecutive exclude-veto frames before dropping an already locked Gabriel track. | Slower/more tolerant; fewer false drops. | Faster/more aggressive; removes wrong excluded locks sooner. |
+| `--fighter-a-exclude-allow-strong-face-match` | off unless passed | Allows a strong Gabriel face match to override body-only exclude similarity. Exclude face matches still reject. | Boolean. | Off means body exclude remains a hard veto in strict mode. |
+| `--fighter-a-strong-face-match-score` | `0.70` | Gabriel face score needed for the optional body-exclude override. | Stricter; only very strong face matches override body exclude. | Looser; more chance of false face override. |
 | `--locked-fighter-exclude-grace-score` | `0.96` | Exclude score needed before threatening already locked Gabriel. | Safer for Gabriel lock; extreme exclude needed to drop him. | More aggressive dropping; can lose Gabriel from false exclude. |
 | `--locked-fighter-min-continuity-score` | `0.60` | Continuity needed to keep locked Gabriel through ambiguity. | Stricter; can drop Gabriel during occlusion/crossing. | Looser; keeps lock longer, but may preserve wrong ID. |
 | `--locked-fighter-drop-confirmation-frames` | `10` | Frames required before dropping locked Gabriel for hard issues. | More stable; slower to drop bad lock. | More reactive; easier to lose Gabriel. |
@@ -50,6 +54,8 @@ These are the first parameters to tune when Gabriel tracking becomes erratic:
 --fighter-a-min-face-match-score
 --fighter-a-min-exclude-face-match-score
 --fighter-a-min-exclude-body-match-score
+--fighter-a-exclude-reference-hard-veto
+--fighter-a-exclude-veto-confirmation-frames
 --identity-switch-confirmation-frames
 --identity-recovery-confirmation-frames
 --locked-fighter-min-continuity-score
@@ -62,7 +68,8 @@ These are the first parameters to tune when Gabriel tracking becomes erratic:
 - For confirmation-frame parameters, higher is firmer/slower and lower is faster/jumpier.
 - For Gabriel stability, prefer increasing confirmation frames before lowering identity thresholds.
 - Exclude face matching should remain a hard rejection.
-- Exclude body/crop matching should remain a soft warning unless Gabriel evidence is weak.
+- Use `--fighter-a-exclude-reference-hard-veto` when known excluded people are still receiving Gabriel's yellow box.
+- With hard veto on, lower `--fighter-a-exclude-veto-confirmation-frames` removes bad locked tracks faster; higher values reduce flicker from one-frame false excludes.
 
 ## Split Exclude Score Meaning
 
@@ -78,7 +85,7 @@ The intended behavior is:
 
 ```text
 exclude_face = hard rejection
-exclude_body = soft warning unless Gabriel evidence is weak
+exclude_body = soft warning by default; hard rejection when --fighter-a-exclude-reference-hard-veto is enabled
 ```
 
-This prevents Gabriel from being dropped just because his white gi, black belt, or mat background resembles an exclude reference crop.
+The hard-veto mode is better when the exclude folder contains specific people or items that should never be tagged as Gabriel. The only optional exception is `--fighter-a-exclude-allow-strong-face-match`, which lets a strong Gabriel face match override a body-only exclude crop match; exclude face matches still reject.
