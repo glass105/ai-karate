@@ -135,6 +135,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--arena-roi", default="0.2,0.1,0.8,0.9")
     parser.add_argument("--confidence", default=0.35, type=float)
     parser.add_argument("--keypoint-threshold", default=0.35, type=float)
+    parser.add_argument("--max-seconds", default=0.0, type=float, help="Stop after this many seconds; 0 means full video.")
+    parser.add_argument("--strike-history-frames", default=6, type=int)
+    parser.add_argument("--min-punch-endpoint-motion", default=25.0, type=float)
+    parser.add_argument("--min-kick-endpoint-motion", default=25.0, type=float)
+    parser.add_argument("--min-punch-extension-delta", default=12.0, type=float)
+    parser.add_argument("--min-kick-extension-delta", default=12.0, type=float)
+    parser.add_argument("--min-punch-extension-ratio", default=1.20, type=float)
+    parser.add_argument("--min-kick-extension-ratio", default=1.20, type=float)
+    parser.add_argument("--min-kick-foot-height-change", default=0.0, type=float)
+    parser.add_argument("--strike-min-score", default=1.0, type=float)
+    parser.add_argument("--punch-cooldown-seconds", default=0.35, type=float)
+    parser.add_argument("--kick-cooldown-seconds", default=0.50, type=float)
     return parser
 
 
@@ -602,7 +614,21 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     csv_path = args.output_dir / f"{stem}_tracks.csv"
     summary_path = args.output_dir / f"{stem}_summary.json"
     writer = cv2.VideoWriter(str(video_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height))
-    counter = StrikeCounter(fps=fps)
+    max_frames = int(args.max_seconds * fps) if args.max_seconds and args.max_seconds > 0 else 0
+    counter = StrikeCounter(
+        fps=fps,
+        history_frames=args.strike_history_frames,
+        punch_cooldown_seconds=args.punch_cooldown_seconds,
+        kick_cooldown_seconds=args.kick_cooldown_seconds,
+        min_punch_endpoint_motion=args.min_punch_endpoint_motion,
+        min_kick_endpoint_motion=args.min_kick_endpoint_motion,
+        min_punch_extension_delta=args.min_punch_extension_delta,
+        min_kick_extension_delta=args.min_kick_extension_delta,
+        min_punch_extension_ratio=args.min_punch_extension_ratio,
+        min_kick_extension_ratio=args.min_kick_extension_ratio,
+        min_kick_foot_height_change=args.min_kick_foot_height_change,
+        min_strike_score=args.strike_min_score,
+    )
     glove_settings = glove_color_settings(args)
     identity = FighterIdentity(
         args.fighter_a_name,
@@ -664,6 +690,10 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "id_exclude_reference_score", "id_exclude_body_score", "id_exclude_face_detected",
         "id_exclude_face_score", "id_continuity_score", "id_reset_side_score", "id_match_gap",
         "id_confirmed_not_top", "id_hard_reject_active", "id_rejection_reason", "id_visual_state",
+        "strike_punch_score", "strike_kick_score", "strike_punch_endpoint_motion", "strike_kick_endpoint_motion",
+        "strike_punch_extension_delta", "strike_kick_extension_delta", "strike_punch_extension_ratio",
+        "strike_kick_extension_ratio", "strike_punch_cooldown", "strike_kick_cooldown", "strike_candidate_type",
+        "strike_confirmed", "strike_rejection_reason",
         "estimated_action",
     ]
     with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
@@ -674,6 +704,9 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             if not ok:
                 break
             frame_count += 1
+            if max_frames and frame_count > max_frames:
+                frame_count -= 1
+                break
             if args.pose_backend == "yolo":
                 result = pose_model.predict(frame, conf=args.confidence, verbose=False)[0]
                 candidates = yolo_candidates(result, frame, args.keypoint_threshold)
@@ -818,8 +851,13 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     cv2.putText(annotated, f"{args.fighter_a_name}?", (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             for candidate in tracked:
                 track_id = candidate["track_id"]
-                action = counter.update(track_id, candidate["keypoints"])
                 label = identity.label(track_id)
+                action = counter.update(
+                    track_id,
+                    candidate["keypoints"],
+                    count_enabled=label == args.fighter_a_name,
+                )
+                strike_debug = counter.last_debug[track_id]
                 score = identity_scores.get(track_id)
                 visual_state = ""
                 if score is not None:
@@ -867,6 +905,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "id_hard_reject_active": score.hard_reject_active if score else False,
                         "id_rejection_reason": score.rejection_reason if score else "",
                         "id_visual_state": visual_state,
+                        **strike_debug.as_csv_fields(),
                         "estimated_action": action,
                     }
                 )
@@ -882,6 +921,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "tracker": args.tracker,
         "experiment_label": args.experiment_label,
         "fps": fps,
+        "max_seconds": args.max_seconds,
         "frames_processed": frame_count,
         "fighter_a_name": args.fighter_a_name,
         "fighter_a_cues": {
@@ -945,6 +985,20 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "identity_resets": identity.reset_count,
         "counts_by_track_id": counter.counts,
         "named_fighter_candidate_counts": named_counts,
+        "strike_counter": {
+            "history_frames": args.strike_history_frames,
+            "min_punch_endpoint_motion": args.min_punch_endpoint_motion,
+            "min_kick_endpoint_motion": args.min_kick_endpoint_motion,
+            "min_punch_extension_delta": args.min_punch_extension_delta,
+            "min_kick_extension_delta": args.min_kick_extension_delta,
+            "min_punch_extension_ratio": args.min_punch_extension_ratio,
+            "min_kick_extension_ratio": args.min_kick_extension_ratio,
+            "min_kick_foot_height_change": args.min_kick_foot_height_change,
+            "strike_min_score": args.strike_min_score,
+            "punch_cooldown_seconds": args.punch_cooldown_seconds,
+            "kick_cooldown_seconds": args.kick_cooldown_seconds,
+            "counts_only_selected_fighter": True,
+        },
         "artifacts": {"annotated_video": str(video_path), "tracks_csv": str(csv_path)},
     }
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")

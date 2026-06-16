@@ -1,6 +1,7 @@
-"""Simple pose heuristics for prototype strike counting."""
+"""Pose heuristics and debug metrics for prototype strike counting."""
 
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
 from math import dist
 from typing import Sequence
 
@@ -8,8 +9,53 @@ Point = Sequence[float]
 Keypoints = Sequence[Point]
 
 
+@dataclass
+class StrikeDebug:
+    """Per-frame strike decision metrics for CSV/debug review."""
+
+    punch_score: float = 0.0
+    kick_score: float = 0.0
+    punch_endpoint_motion: float = 0.0
+    kick_endpoint_motion: float = 0.0
+    punch_extension_delta: float = 0.0
+    kick_extension_delta: float = 0.0
+    punch_extension_ratio: float = 0.0
+    kick_extension_ratio: float = 0.0
+    punch_cooldown: int = 0
+    kick_cooldown: int = 0
+    strike_candidate_type: str = ""
+    strike_confirmed: bool = False
+    strike_rejection_reason: str = ""
+
+    def as_csv_fields(self) -> dict[str, object]:
+        return {
+            "strike_punch_score": round(self.punch_score, 4),
+            "strike_kick_score": round(self.kick_score, 4),
+            "strike_punch_endpoint_motion": round(self.punch_endpoint_motion, 4),
+            "strike_kick_endpoint_motion": round(self.kick_endpoint_motion, 4),
+            "strike_punch_extension_delta": round(self.punch_extension_delta, 4),
+            "strike_kick_extension_delta": round(self.kick_extension_delta, 4),
+            "strike_punch_extension_ratio": round(self.punch_extension_ratio, 4),
+            "strike_kick_extension_ratio": round(self.kick_extension_ratio, 4),
+            "strike_punch_cooldown": self.punch_cooldown,
+            "strike_kick_cooldown": self.kick_cooldown,
+            "strike_candidate_type": self.strike_candidate_type,
+            "strike_confirmed": self.strike_confirmed,
+            "strike_rejection_reason": self.strike_rejection_reason,
+        }
+
+
+@dataclass
+class LimbMotion:
+    endpoint_motion: float = 0.0
+    extension_delta: float = 0.0
+    extension_ratio: float = 0.0
+    score: float = 0.0
+    details: dict[str, float] = field(default_factory=dict)
+
+
 class StrikeCounter:
-    """Estimate strike candidates from pose extension over a short history."""
+    """Estimate and explain strike candidates from short pose history."""
 
     def __init__(
         self,
@@ -17,10 +63,26 @@ class StrikeCounter:
         history_frames: int = 6,
         punch_cooldown_seconds: float = 0.35,
         kick_cooldown_seconds: float = 0.50,
+        min_punch_endpoint_motion: float = 25.0,
+        min_kick_endpoint_motion: float = 25.0,
+        min_punch_extension_delta: float = 12.0,
+        min_kick_extension_delta: float = 12.0,
+        min_punch_extension_ratio: float = 1.20,
+        min_kick_extension_ratio: float = 1.20,
+        min_kick_foot_height_change: float = 0.0,
+        min_strike_score: float = 1.0,
     ) -> None:
         self.history_frames = history_frames
         self.punch_cooldown_frames = max(1, int(fps * punch_cooldown_seconds))
         self.kick_cooldown_frames = max(1, int(fps * kick_cooldown_seconds))
+        self.min_punch_endpoint_motion = min_punch_endpoint_motion
+        self.min_kick_endpoint_motion = min_kick_endpoint_motion
+        self.min_punch_extension_delta = min_punch_extension_delta
+        self.min_kick_extension_delta = min_kick_extension_delta
+        self.min_punch_extension_ratio = min_punch_extension_ratio
+        self.min_kick_extension_ratio = min_kick_extension_ratio
+        self.min_kick_foot_height_change = min_kick_foot_height_change
+        self.min_strike_score = min_strike_score
         self.history: dict[int, deque[Keypoints]] = defaultdict(
             lambda: deque(maxlen=self.history_frames)
         )
@@ -30,26 +92,69 @@ class StrikeCounter:
         self.counts: dict[int, dict[str, int]] = defaultdict(
             lambda: {"punches": 0, "kicks": 0}
         )
+        self.last_debug: dict[int, StrikeDebug] = defaultdict(StrikeDebug)
 
-    def update(self, track_id: int, keypoints: Keypoints) -> str:
+    def update(self, track_id: int, keypoints: Keypoints, count_enabled: bool = True) -> str:
         if track_id < 0 or len(keypoints) < 17:
+            self.last_debug[track_id] = StrikeDebug(strike_rejection_reason="invalid_pose")
             return ""
 
         self.history[track_id].append(keypoints)
         self._tick_cooldowns(track_id)
         if len(self.history[track_id]) < self.history_frames:
+            self.last_debug[track_id] = StrikeDebug(
+                punch_cooldown=self.cooldowns[track_id]["punch"],
+                kick_cooldown=self.cooldowns[track_id]["kick"],
+                strike_rejection_reason="history_warmup",
+            )
             return ""
 
-        if self._detect_punch(track_id) and self.cooldowns[track_id]["punch"] == 0:
+        punch = self._punch_motion(track_id)
+        kick = self._kick_motion(track_id)
+        debug = StrikeDebug(
+            punch_score=punch.score,
+            kick_score=kick.score,
+            punch_endpoint_motion=punch.endpoint_motion,
+            kick_endpoint_motion=kick.endpoint_motion,
+            punch_extension_delta=punch.extension_delta,
+            kick_extension_delta=kick.extension_delta,
+            punch_extension_ratio=punch.extension_ratio,
+            kick_extension_ratio=kick.extension_ratio,
+            punch_cooldown=self.cooldowns[track_id]["punch"],
+            kick_cooldown=self.cooldowns[track_id]["kick"],
+        )
+        action = "punch" if punch.score >= kick.score else "kick"
+        action_score = max(punch.score, kick.score)
+        debug.strike_candidate_type = action if action_score >= self.min_strike_score else ""
+
+        if not count_enabled and debug.strike_candidate_type:
+            debug.strike_rejection_reason = "not_selected_fighter"
+            self.last_debug[track_id] = debug
+            return ""
+
+        if punch.score >= self.min_strike_score and self.cooldowns[track_id]["punch"] == 0:
             self.counts[track_id]["punches"] += 1
             self.cooldowns[track_id]["punch"] = self.punch_cooldown_frames
+            debug.punch_cooldown = self.cooldowns[track_id]["punch"]
+            debug.strike_candidate_type = "punch"
+            debug.strike_confirmed = True
+            self.last_debug[track_id] = debug
             return "punch"
 
-        if self._detect_kick(track_id) and self.cooldowns[track_id]["kick"] == 0:
+        if kick.score >= self.min_strike_score and self.cooldowns[track_id]["kick"] == 0:
             self.counts[track_id]["kicks"] += 1
             self.cooldowns[track_id]["kick"] = self.kick_cooldown_frames
+            debug.kick_cooldown = self.cooldowns[track_id]["kick"]
+            debug.strike_candidate_type = "kick"
+            debug.strike_confirmed = True
+            self.last_debug[track_id] = debug
             return "kick"
 
+        if debug.strike_candidate_type:
+            debug.strike_rejection_reason = f"{debug.strike_candidate_type}_cooldown"
+        else:
+            debug.strike_rejection_reason = "below_threshold"
+        self.last_debug[track_id] = debug
         return ""
 
     def _tick_cooldowns(self, track_id: int) -> None:
@@ -57,28 +162,80 @@ class StrikeCounter:
             current = self.cooldowns[track_id][strike_type]
             self.cooldowns[track_id][strike_type] = max(0, current - 1)
 
-    def _detect_punch(self, track_id: int) -> bool:
+    def _punch_motion(self, track_id: int) -> LimbMotion:
         old, new = self.history[track_id][0], self.history[track_id][-1]
-        return any(
-            self._extension_increased(old[shoulder], old[wrist], new[shoulder], new[wrist])
-            for shoulder, wrist in ((5, 9), (6, 10))
+        return max(
+            (
+                self._limb_motion(
+                    old[shoulder],
+                    old[wrist],
+                    new[shoulder],
+                    new[wrist],
+                    self.min_punch_endpoint_motion,
+                    self.min_punch_extension_delta,
+                    self.min_punch_extension_ratio,
+                )
+                for shoulder, wrist in ((5, 9), (6, 10))
+            ),
+            key=lambda motion: motion.score,
         )
 
-    def _detect_kick(self, track_id: int) -> bool:
+    def _kick_motion(self, track_id: int) -> LimbMotion:
         old, new = self.history[track_id][0], self.history[track_id][-1]
-        return any(
-            self._extension_increased(old[hip], old[ankle], new[hip], new[ankle])
-            for hip, ankle in ((11, 15), (12, 16))
+        return max(
+            (
+                self._limb_motion(
+                    old[hip],
+                    old[ankle],
+                    new[hip],
+                    new[ankle],
+                    self.min_kick_endpoint_motion,
+                    self.min_kick_extension_delta,
+                    self.min_kick_extension_ratio,
+                    min_height_change=self.min_kick_foot_height_change,
+                )
+                for hip, ankle in ((11, 15), (12, 16))
+            ),
+            key=lambda motion: motion.score,
         )
 
     @staticmethod
-    def _extension_increased(
+    def _xy(point: Point) -> tuple[float, float]:
+        return float(point[0]), float(point[1])
+
+    @classmethod
+    def _limb_motion(
+        cls,
         old_anchor: Point,
         old_endpoint: Point,
         new_anchor: Point,
         new_endpoint: Point,
-    ) -> bool:
-        old_extension = dist(old_anchor, old_endpoint)
-        new_extension = dist(new_anchor, new_endpoint)
-        endpoint_motion = dist(old_endpoint, new_endpoint)
-        return new_extension > old_extension * 1.25 and endpoint_motion > 25
+        min_endpoint_motion: float,
+        min_extension_delta: float,
+        min_extension_ratio: float,
+        min_height_change: float = 0.0,
+    ) -> LimbMotion:
+        old_anchor_xy = cls._xy(old_anchor)
+        old_endpoint_xy = cls._xy(old_endpoint)
+        new_anchor_xy = cls._xy(new_anchor)
+        new_endpoint_xy = cls._xy(new_endpoint)
+        old_extension = dist(old_anchor_xy, old_endpoint_xy)
+        new_extension = dist(new_anchor_xy, new_endpoint_xy)
+        endpoint_motion = dist(old_endpoint_xy, new_endpoint_xy)
+        extension_delta = new_extension - old_extension
+        extension_ratio = new_extension / old_extension if old_extension > 1e-6 else 0.0
+        height_change = abs(new_endpoint_xy[1] - old_endpoint_xy[1])
+        motion_score = endpoint_motion / min_endpoint_motion if min_endpoint_motion else 0.0
+        delta_score = extension_delta / min_extension_delta if min_extension_delta else 0.0
+        ratio_score = extension_ratio / min_extension_ratio if min_extension_ratio else 0.0
+        height_score = 1.0
+        if min_height_change > 0:
+            height_score = height_change / min_height_change
+        score = min(motion_score, delta_score, ratio_score, height_score)
+        return LimbMotion(
+            endpoint_motion=endpoint_motion,
+            extension_delta=extension_delta,
+            extension_ratio=extension_ratio,
+            score=max(0.0, score),
+            details={"height_change": height_change},
+        )
