@@ -67,6 +67,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-reject-blue-gloves", action="store_true")
     parser.add_argument("--fighter-a-require-standing", action="store_true")
     parser.add_argument(
+        "--fighter-a-require-competition-fighter",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reject candidates outside the configured competition ROI or seated/crouched on the ROI edge.",
+    )
+    parser.add_argument(
         "--fighter-a-reference-images",
         nargs="*",
         default=[],
@@ -543,6 +549,33 @@ def draw_dashed_rectangle(
         cv2.line(frame, (x2, start), (x2, min(start + dash, y2)), color, thickness)
 
 
+def competition_fighter_score(
+    candidate: dict[str, Any],
+    roi_box: tuple[int, int, int, int],
+) -> float:
+    """Reject obvious mat-edge/background people before identity assignment."""
+    x1, _, x2, y2 = candidate["box"]
+    roi_x1, roi_y1, roi_x2, roi_y2 = roi_box
+    roi_width = max(1, roi_x2 - roi_x1)
+    roi_height = max(1, roi_y2 - roi_y1)
+    if y2 > roi_y2:
+        return 0.0
+    if x2 < roi_x1 or x1 > roi_x2:
+        return 0.0
+    overlap_width = max(0, min(x2, roi_x2) - max(x1, roi_x1))
+    if overlap_width / max(1, x2 - x1) < 0.60:
+        return 0.0
+    bottom_fraction = (y2 - roi_y1) / roi_height
+    center_x = (x1 + x2) / 2
+    side_margin = min(center_x - roi_x1, roi_x2 - center_x) / roi_width
+    standing = candidate.get("standing_score", 1.0)
+    if bottom_fraction >= 0.96 and standing < 0.75:
+        return 0.0
+    if bottom_fraction >= 0.92 and side_margin <= 0.10 and standing < 0.80:
+        return 0.0
+    return 1.0
+
+
 def analyze(args: argparse.Namespace) -> dict[str, Any]:
     if not args.input.exists():
         raise SystemExit(f"Input video not found: {args.input}")
@@ -646,6 +679,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         reject_white_gloves=glove_settings["reject_white"],
         reject_blue_gloves=glove_settings["reject_blue"],
         require_standing=args.fighter_a_require_standing,
+        require_competition_fighter=args.fighter_a_require_competition_fighter,
         expect_reference_match=bool(reference_descriptors),
         expect_pose_reference_match=bool(pose_reference_descriptors_list),
         expect_face_match=face_reference_count > 0,
@@ -684,11 +718,12 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "frame", "timestamp_seconds", "track_id", "fighter_label", "confidence",
         "bbox", "keypoints", "red_glove_score", "white_glove_score", "blue_glove_score", "white_uniform_score",
         "black_belt_score", "standing_score", "reference_match_score", "pose_reference_match_score",
+        "competition_fighter_score",
         "exclude_reference_match_score", "exclude_body_match_score", "exclude_face_detected",
         "exclude_face_match_score", "face_detected", "face_match_score", "gabriel_candidate_score", "id_red_wrist_score",
         "id_white_glove_score", "id_blue_glove_score", "id_pose_reference_score", "id_face_detected", "id_face_match_score",
         "id_exclude_reference_score", "id_exclude_body_score", "id_exclude_face_detected",
-        "id_exclude_face_score", "id_continuity_score", "id_reset_side_score", "id_match_gap",
+        "id_exclude_face_score", "id_competition_fighter_score", "id_continuity_score", "id_reset_side_score", "id_match_gap",
         "id_confirmed_not_top", "id_hard_reject_active", "id_rejection_reason", "id_visual_state",
         "strike_punch_score", "strike_kick_score", "strike_punch_endpoint_motion", "strike_kick_endpoint_motion",
         "strike_punch_extension_delta", "strike_kick_extension_delta", "strike_punch_extension_ratio",
@@ -728,6 +763,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             annotated = frame.copy()
             roi_box = draw_pose_candidates(annotated, candidates, roi, score_threshold=args.keypoint_threshold)
             for candidate in candidates:
+                candidate["competition_fighter_score"] = competition_fighter_score(candidate, roi_box)
                 candidate["reference_match_score"] = reference_match_score(
                     frame,
                     candidate["box"],
@@ -776,6 +812,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "track={track} score={score:.3f} red={red:.3f} white={white:.3f} blue={blue:.3f} pose={pose:.3f} "
                         "face_detected={face_detected} face={face:.3f} "
                         "excl_body={exclude_body:.3f} excl_face={exclude_face:.3f} excl_final={exclude:.3f} "
+                        "comp={competition:.3f} "
                         "cont={cont:.3f} reset={reset:.3f} "
                         "gap={gap:.3f} confirmed_not_top={confirmed_not_top} hard_reject={hard_reject} "
                         "state={state} reject={reject}".format(
@@ -790,6 +827,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                             exclude=score.exclude_reference_score,
                             exclude_body=score.exclude_body_score,
                             exclude_face=score.exclude_face_score,
+                            competition=score.competition_fighter_score,
                             cont=score.continuity_score,
                             reset=score.reset_side_score,
                             gap=score.match_gap,
@@ -817,7 +855,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     f"id={candidate['track_id']} gab={score.gabriel_candidate_score:.2f} "
                     f"red={score.red_wrist_score:.2f} white={score.white_glove_score:.2f} "
                     f"blue={score.blue_glove_score:.2f} xb={score.exclude_body_score:.2f} "
-                    f"xf={score.exclude_face_score:.2f} x={score.exclude_reference_score:.2f} {rejection}"
+                    f"xf={score.exclude_face_score:.2f} x={score.exclude_reference_score:.2f} "
+                    f"comp={score.competition_fighter_score:.2f} {rejection}"
                 )
                 cv2.putText(
                     annotated,
@@ -881,6 +920,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "standing_score": round(candidate["standing_score"], 4),
                         "reference_match_score": round(candidate.get("reference_match_score", 0.0), 4),
                         "pose_reference_match_score": round(candidate.get("pose_reference_match_score", 0.0), 4),
+                        "competition_fighter_score": round(candidate.get("competition_fighter_score", 1.0), 4),
                         "exclude_reference_match_score": round(candidate.get("exclude_reference_match_score", 0.0), 4),
                         "exclude_body_match_score": round(candidate.get("exclude_body_match_score", 0.0), 4),
                         "exclude_face_detected": candidate.get("exclude_face_detected", False),
@@ -898,6 +938,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "id_exclude_body_score": round(score.exclude_body_score, 4) if score else 0.0,
                         "id_exclude_face_detected": score.exclude_face_detected if score else False,
                         "id_exclude_face_score": round(score.exclude_face_score, 4) if score else 0.0,
+                        "id_competition_fighter_score": round(score.competition_fighter_score, 4) if score else 0.0,
                         "id_continuity_score": round(score.continuity_score, 4) if score else 0.0,
                         "id_reset_side_score": round(score.reset_side_score, 4) if score else 0.0,
                         "id_match_gap": round(score.match_gap, 4) if score else 0.0,
@@ -940,6 +981,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "reject_white_gloves": glove_settings["reject_white"],
             "reject_blue_gloves": glove_settings["reject_blue"],
             "require_standing": args.fighter_a_require_standing,
+            "require_competition_fighter": args.fighter_a_require_competition_fighter,
             "reference_images": [str(path) for path in reference_paths],
             "reference_image_count": len(reference_descriptors),
             "exclude_reference_images": [str(path) for path in exclude_reference_paths],

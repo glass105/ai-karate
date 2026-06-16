@@ -46,6 +46,35 @@ class FighterIdentityTests(unittest.TestCase):
         )
         self.assertEqual(identity.fighter_a_track_id, 30)
 
+    def test_red_score_is_not_positive_cue_without_expected_glove_color(self) -> None:
+        identity = FighterIdentity("Gabriel", "left")
+        low_red = TrackedBox(10, 100, 0, 200, 100, red_glove_score=0.0)
+        high_red = TrackedBox(20, 100, 0, 200, 100, red_glove_score=1.0)
+
+        scores = identity._score_candidates([low_red, high_red], [low_red, high_red])
+
+        self.assertEqual(
+            scores[10].gabriel_candidate_score,
+            scores[20].gabriel_candidate_score,
+        )
+
+    def test_competition_fighter_gate_blocks_mat_edge_candidate(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            require_competition_fighter=True,
+            fighter_candidate_limit=4,
+        )
+
+        selected = identity.observe(
+            [
+                TrackedBox(10, 100, 0, 300, 400, competition_fighter_score=0.0),
+                TrackedBox(20, 500, 0, 700, 400, competition_fighter_score=1.0),
+            ]
+        )
+
+        self.assertEqual(selected, 20)
+
     def test_black_belt_cue_prefers_visual_match(self) -> None:
         identity = FighterIdentity("Gabriel", "left", expect_black_belt=True, recovery_confirmation_frames=1)
         identity.observe([TrackedBox(10, 100, 0, 200, 100, black_belt_score=1.0)])
@@ -371,7 +400,7 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertTrue(identity.identity_scores[20].hard_reject_active)
 
     def test_identity_scores_report_match_gap_and_confirmed_not_top(self) -> None:
-        identity = FighterIdentity("Gabriel", "left")
+        identity = FighterIdentity("Gabriel", "left", expect_red_gloves=True)
 
         identity.observe(
             [

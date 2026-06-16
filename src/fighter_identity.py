@@ -33,6 +33,7 @@ class TrackedBox:
     exclude_body_match_score: float = 0.0
     exclude_face_match_score: float = 0.0
     exclude_face_detected: bool = False
+    competition_fighter_score: float = 1.0
 
     @property
     def center_x(self) -> float:
@@ -69,6 +70,7 @@ class IdentityScore:
     exclude_body_score: float
     exclude_face_score: float
     exclude_face_detected: bool
+    competition_fighter_score: float
     continuity_score: float
     reset_side_score: float
     match_gap: float
@@ -116,6 +118,7 @@ class FighterIdentity:
         reject_white_gloves: bool = False,
         reject_blue_gloves: bool = False,
         require_standing: bool = False,
+        require_competition_fighter: bool = False,
         expect_reference_match: bool = False,
         require_reference_match: bool = False,
         expect_pose_reference_match: bool = False,
@@ -182,6 +185,7 @@ class FighterIdentity:
         self.reject_white_gloves = reject_white_gloves
         self.reject_blue_gloves = reject_blue_gloves
         self.require_standing = require_standing
+        self.require_competition_fighter = require_competition_fighter
         self.expect_reference_match = expect_reference_match
         self.require_reference_match = require_reference_match
         self.expect_pose_reference_match = expect_pose_reference_match
@@ -395,7 +399,7 @@ class FighterIdentity:
         if reason in {"red_below_threshold", "white_below_threshold", "blue_below_threshold"}:
             self._clear_drop_pending()
             return self._is_positionally_plausible(box)
-        if reason in {"blue_glove", "not_standing", "reference_below_threshold"}:
+        if reason in {"blue_glove", "not_standing", "not_competition_fighter", "reference_below_threshold"}:
             self._clear_drop_pending()
             return False
         if reason not in {"exclude_reference", "face_mismatch"}:
@@ -516,7 +520,12 @@ class FighterIdentity:
             for box in boxes
             if not self.require_standing or box.standing_score >= self.min_standing_score
         ]
-        ordered = sorted(standing or boxes, key=lambda box: box.area, reverse=True)[:2]
+        competition = [
+            box
+            for box in standing
+            if not self.require_competition_fighter or box.competition_fighter_score >= 1.0
+        ]
+        ordered = sorted(competition or standing or boxes, key=lambda box: box.area, reverse=True)[:2]
         current = next((box for box in boxes if box.track_id == self.fighter_a_track_id), None)
         if current is not None and current not in ordered:
             ordered = [current] + [box for box in ordered if box.track_id != current.track_id]
@@ -561,6 +570,7 @@ class FighterIdentity:
                 or box.blue_glove_score < max(box.red_glove_score, box.white_glove_score)
             )
             and (not self.require_standing or box.standing_score >= self.min_standing_score)
+            and (not self.require_competition_fighter or box.competition_fighter_score >= 1.0)
             and (
                 not self.require_reference_match
                 or box.reference_match_score >= self.min_reference_match_score
@@ -640,7 +650,8 @@ class FighterIdentity:
             reset_side_score = 1.0 if reset_side_x is not None and box.center_x == reset_side_x else 0.0
             cue_values = []
             glove_scores = self._expected_glove_scores(box)
-            cue_values.append((max(glove_scores) if glove_scores else box.red_glove_score, 0.30))
+            if glove_scores:
+                cue_values.append((max(glove_scores), 0.30))
             cue_values.append((box.standing_score, 0.10))
             if self.expect_reference_match:
                 cue_values.append((box.reference_match_score, 0.15))
@@ -677,6 +688,7 @@ class FighterIdentity:
                 exclude_body_score=self._exclude_body_score(box),
                 exclude_face_score=box.exclude_face_match_score,
                 exclude_face_detected=box.exclude_face_detected,
+                competition_fighter_score=box.competition_fighter_score,
                 continuity_score=continuity,
                 reset_side_score=reset_side_score,
                 match_gap=candidate_score - next_best_score,
@@ -694,6 +706,8 @@ class FighterIdentity:
     def _rejection_reason(self, box: TrackedBox, active_ids: set[int]) -> str:
         if box.track_id not in active_ids:
             return "not_active_fighter_pair"
+        if self.require_competition_fighter and box.competition_fighter_score < 1.0:
+            return "not_competition_fighter"
         if self.reject_red_gloves and box.red_glove_score >= max(box.white_glove_score, box.blue_glove_score):
             return "red_glove"
         if self.reject_white_gloves and box.white_glove_score >= max(box.red_glove_score, box.blue_glove_score):
@@ -732,6 +746,7 @@ class FighterIdentity:
             "blue_glove",
             "face_mismatch",
             "not_standing",
+            "not_competition_fighter",
             "reference_below_threshold",
         }
 
@@ -760,8 +775,6 @@ class FighterIdentity:
     def _has_meaningful_gabriel_evidence(self, box: TrackedBox) -> bool:
         expected_gloves = self._expected_glove_thresholds(box)
         if expected_gloves and any(score >= threshold for score, threshold in expected_gloves):
-            return True
-        if not expected_gloves and box.red_glove_score >= self.min_red_glove_score:
             return True
         if box.face_detected and box.face_match_score >= self.min_face_match_score:
             return True
