@@ -34,6 +34,51 @@ class StrikeCounterTests(unittest.TestCase):
         self.assertEqual(counter.update(1, second), "kick")
         self.assertEqual(counter.counts[1]["kicks"], 1)
 
+    def test_counts_lower_leg_snap_as_kick(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_kick_endpoint_motion=100.0,
+            min_kick_foot_motion=25.0,
+            min_kick_extension_delta=10.0,
+            min_kick_extension_ratio=1.2,
+        )
+        first = pose()
+        first[11] = [0, 0]
+        first[13] = [40, 0]
+        first[15] = [55, 0]
+        second = pose()
+        second[11] = [0, 0]
+        second[13] = [40, 0]
+        second[15] = [85, 0]
+
+        self.assertEqual(counter.update(1, first), "")
+        self.assertEqual(counter.update(1, second), "kick")
+        self.assertEqual(counter.counts[1]["kicks"], 1)
+
+    def test_counts_foot_travel_with_height_change_as_kick(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_kick_endpoint_motion=100.0,
+            min_kick_foot_motion=30.0,
+            min_kick_extension_delta=100.0,
+            min_kick_extension_ratio=10.0,
+            min_kick_foot_height_change=20.0,
+        )
+        first = pose()
+        first[11] = [0, 0]
+        first[13] = [20, 30]
+        first[15] = [40, 60]
+        second = pose()
+        second[11] = [0, 0]
+        second[13] = [20, 30]
+        second[15] = [80, 20]
+
+        self.assertEqual(counter.update(1, first), "")
+        self.assertEqual(counter.update(1, second), "kick")
+        self.assertEqual(counter.counts[1]["kicks"], 1)
+
     def test_does_not_recount_without_rearm(self) -> None:
         counter = StrikeCounter(fps=30, history_frames=2, punch_cooldown_seconds=0.0)
         first = pose()

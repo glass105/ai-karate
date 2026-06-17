@@ -69,6 +69,7 @@ class StrikeCounter:
         kick_cooldown_seconds: float = 0.50,
         min_punch_endpoint_motion: float = 25.0,
         min_kick_endpoint_motion: float = 25.0,
+        min_kick_foot_motion: float = 0.0,
         min_punch_extension_delta: float = 12.0,
         min_kick_extension_delta: float = 12.0,
         min_punch_extension_ratio: float = 1.20,
@@ -83,6 +84,7 @@ class StrikeCounter:
         self.kick_cooldown_frames = max(1, int(fps * kick_cooldown_seconds))
         self.min_punch_endpoint_motion = min_punch_endpoint_motion
         self.min_kick_endpoint_motion = min_kick_endpoint_motion
+        self.min_kick_foot_motion = min_kick_foot_motion
         self.min_punch_extension_delta = min_punch_extension_delta
         self.min_kick_extension_delta = min_kick_extension_delta
         self.min_punch_extension_ratio = min_punch_extension_ratio
@@ -225,21 +227,87 @@ class StrikeCounter:
 
     def _kick_motion(self, track_id: int) -> LimbMotion:
         old, new = self.history[track_id][0], self.history[track_id][-1]
-        return max(
-            (
-                self._limb_motion(
-                    old[hip],
-                    old[ankle],
-                    new[hip],
-                    new[ankle],
-                    self.min_kick_endpoint_motion,
-                    self.min_kick_extension_delta,
-                    self.min_kick_extension_ratio,
-                    min_height_change=self.min_kick_foot_height_change,
+        candidates: list[LimbMotion] = []
+        for hip, knee, ankle in ((11, 13, 15), (12, 14, 16)):
+            hip_to_ankle = self._limb_motion(
+                old[hip],
+                old[ankle],
+                new[hip],
+                new[ankle],
+                self.min_kick_endpoint_motion,
+                self.min_kick_extension_delta,
+                self.min_kick_extension_ratio,
+                min_height_change=self.min_kick_foot_height_change,
+            )
+            knee_to_ankle = self._limb_motion(
+                old[knee],
+                old[ankle],
+                new[knee],
+                new[ankle],
+                self.min_kick_foot_motion or self.min_kick_endpoint_motion,
+                self.min_kick_extension_delta,
+                self.min_kick_extension_ratio,
+                min_height_change=self.min_kick_foot_height_change,
+            )
+            candidates.extend((hip_to_ankle, knee_to_ankle))
+            if self.min_kick_foot_motion > 0:
+                candidates.append(
+                    self._foot_travel_motion(
+                        old[hip],
+                        old[knee],
+                        old[ankle],
+                        new[hip],
+                        new[knee],
+                        new[ankle],
+                    )
                 )
-                for hip, ankle in ((11, 15), (12, 16))
-            ),
-            key=lambda motion: motion.score,
+        return max(candidates, key=lambda motion: motion.score)
+
+    def _foot_travel_motion(
+        self,
+        old_hip: Point,
+        old_knee: Point,
+        old_ankle: Point,
+        new_hip: Point,
+        new_knee: Point,
+        new_ankle: Point,
+    ) -> LimbMotion:
+        old_hip_xy = self._xy(old_hip)
+        old_knee_xy = self._xy(old_knee)
+        old_ankle_xy = self._xy(old_ankle)
+        new_hip_xy = self._xy(new_hip)
+        new_knee_xy = self._xy(new_knee)
+        new_ankle_xy = self._xy(new_ankle)
+
+        endpoint_motion = dist(old_ankle_xy, new_ankle_xy)
+        old_full_extension = dist(old_hip_xy, old_ankle_xy)
+        new_full_extension = dist(new_hip_xy, new_ankle_xy)
+        old_lower_extension = dist(old_knee_xy, old_ankle_xy)
+        new_lower_extension = dist(new_knee_xy, new_ankle_xy)
+        full_delta = new_full_extension - old_full_extension
+        lower_delta = new_lower_extension - old_lower_extension
+        extension_delta = max(full_delta, lower_delta)
+        extension_ratio = (
+            max(
+                new_full_extension / old_full_extension if old_full_extension > 1e-6 else 0.0,
+                new_lower_extension / old_lower_extension if old_lower_extension > 1e-6 else 0.0,
+            )
+        )
+        height_change = abs(new_ankle_xy[1] - old_ankle_xy[1])
+
+        motion_score = endpoint_motion / self.min_kick_foot_motion if self.min_kick_foot_motion else 0.0
+        delta_score = extension_delta / self.min_kick_extension_delta if self.min_kick_extension_delta else 0.0
+        ratio_score = extension_ratio / self.min_kick_extension_ratio if self.min_kick_extension_ratio else 0.0
+        support_score = max(delta_score, ratio_score)
+        if self.min_kick_foot_height_change > 0:
+            support_score = max(support_score, height_change / self.min_kick_foot_height_change)
+        score = min(motion_score, support_score)
+        return LimbMotion(
+            endpoint_motion=endpoint_motion,
+            extension_delta=extension_delta,
+            extension_ratio=extension_ratio,
+            score=max(0.0, score),
+            details={"height_change": height_change},
         )
 
     @staticmethod

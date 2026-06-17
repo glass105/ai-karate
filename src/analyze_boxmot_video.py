@@ -145,6 +145,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--strike-history-frames", default=6, type=int)
     parser.add_argument("--min-punch-endpoint-motion", default=25.0, type=float)
     parser.add_argument("--min-kick-endpoint-motion", default=25.0, type=float)
+    parser.add_argument(
+        "--min-kick-foot-motion",
+        default=0.0,
+        type=float,
+        help="Minimum ankle/foot travel for kick snap scoring; 0 reuses --min-kick-endpoint-motion.",
+    )
     parser.add_argument("--min-punch-extension-delta", default=12.0, type=float)
     parser.add_argument("--min-kick-extension-delta", default=12.0, type=float)
     parser.add_argument("--min-punch-extension-ratio", default=1.20, type=float)
@@ -657,6 +663,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         kick_cooldown_seconds=args.kick_cooldown_seconds,
         min_punch_endpoint_motion=args.min_punch_endpoint_motion,
         min_kick_endpoint_motion=args.min_kick_endpoint_motion,
+        min_kick_foot_motion=args.min_kick_foot_motion,
         min_punch_extension_delta=args.min_punch_extension_delta,
         min_kick_extension_delta=args.min_kick_extension_delta,
         min_punch_extension_ratio=args.min_punch_extension_ratio,
@@ -1036,6 +1043,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "history_frames": args.strike_history_frames,
             "min_punch_endpoint_motion": args.min_punch_endpoint_motion,
             "min_kick_endpoint_motion": args.min_kick_endpoint_motion,
+            "min_kick_foot_motion": args.min_kick_foot_motion,
             "min_punch_extension_delta": args.min_punch_extension_delta,
             "min_kick_extension_delta": args.min_kick_extension_delta,
             "min_punch_extension_ratio": args.min_punch_extension_ratio,
