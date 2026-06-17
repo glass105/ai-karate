@@ -23,6 +23,8 @@ class StrikeDebug:
     kick_extension_ratio: float = 0.0
     punch_cooldown: int = 0
     kick_cooldown: int = 0
+    punch_armed: bool = True
+    kick_armed: bool = True
     strike_candidate_type: str = ""
     strike_confirmed: bool = False
     strike_rejection_reason: str = ""
@@ -39,6 +41,8 @@ class StrikeDebug:
             "strike_kick_extension_ratio": round(self.kick_extension_ratio, 4),
             "strike_punch_cooldown": self.punch_cooldown,
             "strike_kick_cooldown": self.kick_cooldown,
+            "strike_punch_armed": self.punch_armed,
+            "strike_kick_armed": self.kick_armed,
             "strike_candidate_type": self.strike_candidate_type,
             "strike_confirmed": self.strike_confirmed,
             "strike_rejection_reason": self.strike_rejection_reason,
@@ -71,6 +75,8 @@ class StrikeCounter:
         min_kick_extension_ratio: float = 1.20,
         min_kick_foot_height_change: float = 0.0,
         min_strike_score: float = 1.0,
+        strike_rearm_score: float = 0.60,
+        min_strike_score_gap: float = 0.10,
     ) -> None:
         self.history_frames = history_frames
         self.punch_cooldown_frames = max(1, int(fps * punch_cooldown_seconds))
@@ -83,6 +89,8 @@ class StrikeCounter:
         self.min_kick_extension_ratio = min_kick_extension_ratio
         self.min_kick_foot_height_change = min_kick_foot_height_change
         self.min_strike_score = min_strike_score
+        self.strike_rearm_score = strike_rearm_score
+        self.min_strike_score_gap = min_strike_score_gap
         self.history: dict[int, deque[Keypoints]] = defaultdict(
             lambda: deque(maxlen=self.history_frames)
         )
@@ -91,6 +99,9 @@ class StrikeCounter:
         )
         self.counts: dict[int, dict[str, int]] = defaultdict(
             lambda: {"punches": 0, "kicks": 0}
+        )
+        self.armed: dict[int, dict[str, bool]] = defaultdict(
+            lambda: {"punch": True, "kick": True}
         )
         self.last_debug: dict[int, StrikeDebug] = defaultdict(StrikeDebug)
 
@@ -111,6 +122,8 @@ class StrikeCounter:
 
         punch = self._punch_motion(track_id)
         kick = self._kick_motion(track_id)
+        self._rearm_if_retracted(track_id, "punch", punch.score)
+        self._rearm_if_retracted(track_id, "kick", kick.score)
         debug = StrikeDebug(
             punch_score=punch.score,
             kick_score=kick.score,
@@ -122,9 +135,12 @@ class StrikeCounter:
             kick_extension_ratio=kick.extension_ratio,
             punch_cooldown=self.cooldowns[track_id]["punch"],
             kick_cooldown=self.cooldowns[track_id]["kick"],
+            punch_armed=self.armed[track_id]["punch"],
+            kick_armed=self.armed[track_id]["kick"],
         )
         action = "punch" if punch.score >= kick.score else "kick"
         action_score = max(punch.score, kick.score)
+        other_score = kick.score if action == "punch" else punch.score
         debug.strike_candidate_type = action if action_score >= self.min_strike_score else ""
 
         if not count_enabled and debug.strike_candidate_type:
@@ -132,23 +148,46 @@ class StrikeCounter:
             self.last_debug[track_id] = debug
             return ""
 
-        if punch.score >= self.min_strike_score and self.cooldowns[track_id]["punch"] == 0:
-            self.counts[track_id]["punches"] += 1
-            self.cooldowns[track_id]["punch"] = self.punch_cooldown_frames
-            debug.punch_cooldown = self.cooldowns[track_id]["punch"]
-            debug.strike_candidate_type = "punch"
-            debug.strike_confirmed = True
+        if action_score >= self.min_strike_score and action_score - other_score < self.min_strike_score_gap:
+            debug.strike_rejection_reason = "ambiguous_strike"
             self.last_debug[track_id] = debug
-            return "punch"
+            return ""
 
-        if kick.score >= self.min_strike_score and self.cooldowns[track_id]["kick"] == 0:
-            self.counts[track_id]["kicks"] += 1
-            self.cooldowns[track_id]["kick"] = self.kick_cooldown_frames
-            debug.kick_cooldown = self.cooldowns[track_id]["kick"]
-            debug.strike_candidate_type = "kick"
-            debug.strike_confirmed = True
+        if action == "punch" and punch.score >= self.min_strike_score:
+            if self.cooldowns[track_id]["punch"] > 0:
+                debug.strike_rejection_reason = "punch_cooldown"
+            elif not self.armed[track_id]["punch"]:
+                debug.strike_rejection_reason = "punch_not_rearmed"
+            else:
+                self.counts[track_id]["punches"] += 1
+                self.cooldowns[track_id]["punch"] = self.punch_cooldown_frames
+                self.armed[track_id]["punch"] = False
+                debug.punch_cooldown = self.cooldowns[track_id]["punch"]
+                debug.punch_armed = False
+                debug.strike_candidate_type = "punch"
+                debug.strike_confirmed = True
+                self.last_debug[track_id] = debug
+                return "punch"
             self.last_debug[track_id] = debug
-            return "kick"
+            return ""
+
+        if action == "kick" and kick.score >= self.min_strike_score:
+            if self.cooldowns[track_id]["kick"] > 0:
+                debug.strike_rejection_reason = "kick_cooldown"
+            elif not self.armed[track_id]["kick"]:
+                debug.strike_rejection_reason = "kick_not_rearmed"
+            else:
+                self.counts[track_id]["kicks"] += 1
+                self.cooldowns[track_id]["kick"] = self.kick_cooldown_frames
+                self.armed[track_id]["kick"] = False
+                debug.kick_cooldown = self.cooldowns[track_id]["kick"]
+                debug.kick_armed = False
+                debug.strike_candidate_type = "kick"
+                debug.strike_confirmed = True
+                self.last_debug[track_id] = debug
+                return "kick"
+            self.last_debug[track_id] = debug
+            return ""
 
         if debug.strike_candidate_type:
             debug.strike_rejection_reason = f"{debug.strike_candidate_type}_cooldown"
@@ -156,6 +195,10 @@ class StrikeCounter:
             debug.strike_rejection_reason = "below_threshold"
         self.last_debug[track_id] = debug
         return ""
+
+    def _rearm_if_retracted(self, track_id: int, strike_type: str, score: float) -> None:
+        if score < self.strike_rearm_score:
+            self.armed[track_id][strike_type] = True
 
     def _tick_cooldowns(self, track_id: int) -> None:
         for strike_type in ("punch", "kick"):
@@ -228,10 +271,10 @@ class StrikeCounter:
         motion_score = endpoint_motion / min_endpoint_motion if min_endpoint_motion else 0.0
         delta_score = extension_delta / min_extension_delta if min_extension_delta else 0.0
         ratio_score = extension_ratio / min_extension_ratio if min_extension_ratio else 0.0
-        height_score = 1.0
+        scores = [motion_score, delta_score, ratio_score]
         if min_height_change > 0:
-            height_score = height_change / min_height_change
-        score = min(motion_score, delta_score, ratio_score, height_score)
+            scores.append(height_change / min_height_change)
+        score = min(scores)
         return LimbMotion(
             endpoint_motion=endpoint_motion,
             extension_delta=extension_delta,

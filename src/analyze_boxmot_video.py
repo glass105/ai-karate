@@ -151,6 +151,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-kick-extension-ratio", default=1.20, type=float)
     parser.add_argument("--min-kick-foot-height-change", default=0.0, type=float)
     parser.add_argument("--strike-min-score", default=1.0, type=float)
+    parser.add_argument("--strike-rearm-score", default=0.60, type=float)
+    parser.add_argument("--min-strike-score-gap", default=0.10, type=float)
     parser.add_argument("--punch-cooldown-seconds", default=0.35, type=float)
     parser.add_argument("--kick-cooldown-seconds", default=0.50, type=float)
     return parser
@@ -661,6 +663,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         min_kick_extension_ratio=args.min_kick_extension_ratio,
         min_kick_foot_height_change=args.min_kick_foot_height_change,
         min_strike_score=args.strike_min_score,
+        strike_rearm_score=args.strike_rearm_score,
+        min_strike_score_gap=args.min_strike_score_gap,
     )
     glove_settings = glove_color_settings(args)
     identity = FighterIdentity(
@@ -727,8 +731,9 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "id_confirmed_not_top", "id_hard_reject_active", "id_rejection_reason", "id_visual_state",
         "strike_punch_score", "strike_kick_score", "strike_punch_endpoint_motion", "strike_kick_endpoint_motion",
         "strike_punch_extension_delta", "strike_kick_extension_delta", "strike_punch_extension_ratio",
-        "strike_kick_extension_ratio", "strike_punch_cooldown", "strike_kick_cooldown", "strike_candidate_type",
-        "strike_confirmed", "strike_rejection_reason",
+        "strike_kick_extension_ratio", "strike_punch_cooldown", "strike_kick_cooldown",
+        "strike_punch_armed", "strike_kick_armed", "strike_candidate_type", "strike_confirmed",
+        "strike_rejection_reason",
         "estimated_action",
     ]
     with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
@@ -1037,6 +1042,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "min_kick_extension_ratio": args.min_kick_extension_ratio,
             "min_kick_foot_height_change": args.min_kick_foot_height_change,
             "strike_min_score": args.strike_min_score,
+            "strike_rearm_score": args.strike_rearm_score,
+            "min_strike_score_gap": args.min_strike_score_gap,
             "punch_cooldown_seconds": args.punch_cooldown_seconds,
             "kick_cooldown_seconds": args.kick_cooldown_seconds,
             "counts_only_selected_fighter": True,
