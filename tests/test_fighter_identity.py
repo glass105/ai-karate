@@ -254,17 +254,40 @@ class FighterIdentityTests(unittest.TestCase):
             "left",
             reset_after_missing_frames=2,
             recovery_confirmation_frames=1,
+            recovery_threshold=2.0,
         )
         identity.observe([TrackedBox(10, 400, 0, 500, 100)])
         identity.observe([])
         identity.observe([])
+        identity.observe([])
         identity.observe(
             [
-                TrackedBox(20, 300, 0, 400, 100),
-                TrackedBox(30, 500, 0, 600, 100),
+                TrackedBox(20, 160, 0, 260, 100),
+                TrackedBox(30, 260, 0, 360, 100),
             ]
         )
         self.assertEqual(identity.fighter_a_track_id, 20)
+
+    def test_reset_prefers_right_side_after_missing_frames(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "right",
+            reset_after_missing_frames=2,
+            recovery_confirmation_frames=1,
+            recovery_threshold=2.0,
+        )
+        identity.observe([TrackedBox(10, 100, 0, 200, 100)])
+        identity.observe([])
+        identity.observe([])
+        identity.observe([])
+        identity.observe(
+            [
+                TrackedBox(20, 160, 0, 260, 100),
+                TrackedBox(30, 260, 0, 360, 100),
+            ]
+        )
+
+        self.assertEqual(identity.fighter_a_track_id, 30)
 
     def test_does_not_transfer_label_to_one_frame_impostor(self) -> None:
         identity = FighterIdentity(
@@ -627,10 +650,10 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertEqual(identity.label(10), "fighter-10")
         self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference")
 
-    def test_lineup_pause_reanchors_to_initial_left_side(self) -> None:
+    def test_lineup_pause_keeps_initial_left_side(self) -> None:
         identity = FighterIdentity(
             "Gabriel",
-            "right",
+            "left",
             lineup_pause_frames=2,
             lineup_separation_threshold=0.75,
         )
@@ -640,7 +663,6 @@ class FighterIdentityTests(unittest.TestCase):
                 TrackedBox(20, 500, 0, 700, 400),
             ]
         )
-        identity.fighter_a_start = "left"
 
         identity.observe(
             [
@@ -657,12 +679,12 @@ class FighterIdentityTests(unittest.TestCase):
 
         self.assertEqual(selected, 10)
         self.assertEqual(identity.label(10), "Gabriel")
-        self.assertEqual(identity.reset_count, 1)
+        self.assertEqual(identity.reset_count, 0)
 
-    def test_lineup_pause_reanchors_to_initial_right_side_once(self) -> None:
+    def test_lineup_pause_keeps_initial_right_side(self) -> None:
         identity = FighterIdentity(
             "Gabriel",
-            "left",
+            "right",
             lineup_pause_frames=2,
             lineup_separation_threshold=0.75,
         )
@@ -671,12 +693,11 @@ class FighterIdentityTests(unittest.TestCase):
             TrackedBox(20, 500, 0, 700, 400),
         ]
         identity.observe(lineup)
-        identity.fighter_a_start = "right"
 
         identity.observe(lineup)
         self.assertEqual(identity.observe(lineup), 20)
         self.assertEqual(identity.observe(lineup), 20)
-        self.assertEqual(identity.reset_count, 1)
+        self.assertEqual(identity.reset_count, 0)
 
 
 if __name__ == "__main__":

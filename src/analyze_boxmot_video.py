@@ -50,14 +50,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tracker", choices=("ocsort", "deepocsort", "hybridsort", "strongsort", "boosttrack"), required=True)
     parser.add_argument("--reid-weights", default="models/osnet_x0_25_msmt17.pt", type=Path)
     parser.add_argument("--fighter-a-name", default="Gabriel")
-    parser.add_argument("--fighter-a-start", choices=("left", "right"), default="left")
+    parser.add_argument(
+        "--fighter-a-start",
+        choices=("left", "right"),
+        default="left",
+        help="Side where Gabriel starts and resets after stoppages/lineups.",
+    )
     parser.add_argument("--fighter-a-black-belt", action="store_true")
     parser.add_argument("--fighter-a-taller", action="store_true")
     parser.add_argument(
         "--fighter-a-glove-color",
         choices=("red", "white", "blue", "none"),
         default="red",
-        help="Expected Gabriel glove color for this run. The selected color is required for initial lock/reset.",
+        help=(
+            "Expected Gabriel glove color for this run. The selected color is required for initial lock/reset; "
+            "'none' disables positive glove-color evidence while reject-glove flags still apply."
+        ),
     )
     parser.add_argument("--fighter-a-require-red-gloves", action="store_true")
     parser.add_argument("--fighter-a-require-white-gloves", action="store_true")
@@ -88,8 +96,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--fighter-a-require-reference-match", action="store_true")
     parser.add_argument("--fighter-a-min-reference-match-score", default=0.05, type=float)
-    parser.add_argument("--fighter-a-min-exclude-reference-match-score", default=0.80, type=float)
-    parser.add_argument("--fighter-a-min-exclude-body-match-score", default=0.95, type=float)
+    parser.add_argument("--fighter-a-min-exclude-reference-match-score", default=0.90, type=float)
+    parser.add_argument("--fighter-a-min-exclude-body-match-score", default=0.97, type=float)
     parser.add_argument("--fighter-a-min-exclude-face-match-score", default=0.45, type=float)
     parser.add_argument(
         "--fighter-a-exclude-reference-hard-veto",
@@ -98,13 +106,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--fighter-a-exclude-veto-confirmation-frames",
-        default=3,
+        default=4,
         type=int,
         help="Consecutive exclude-veto frames before dropping an already locked Gabriel track.",
     )
     parser.add_argument(
         "--fighter-a-exclude-allow-strong-face-match",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Allow a strong Gabriel face match to override a body-only exclude match.",
     )
     parser.add_argument("--fighter-a-enable-face-match", action="store_true")
@@ -121,7 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--fighter-a-reject-face-mismatch", action="store_true")
     parser.add_argument("--fighter-a-min-face-match-score", default=0.25, type=float)
-    parser.add_argument("--fighter-a-strong-face-match-score", default=0.70, type=float)
+    parser.add_argument("--fighter-a-strong-face-match-score", default=0.75, type=float)
     parser.add_argument("--fighter-a-min-red-glove-score", default=0.15, type=float)
     parser.add_argument("--fighter-a-min-white-glove-score", default=0.02, type=float)
     parser.add_argument("--fighter-a-min-blue-glove-score", default=0.15, type=float)
@@ -133,9 +142,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--lineup-pause-frames", default=30, type=int)
     parser.add_argument("--lineup-motion-threshold", default=0.10, type=float)
     parser.add_argument("--lineup-separation-threshold", default=1.20, type=float)
-    parser.add_argument("--locked-fighter-exclude-grace-score", default=0.96, type=float)
-    parser.add_argument("--locked-fighter-min-continuity-score", default=0.60, type=float)
-    parser.add_argument("--locked-fighter-drop-confirmation-frames", default=10, type=int)
+    parser.add_argument("--locked-fighter-exclude-grace-score", default=0.98, type=float)
+    parser.add_argument("--locked-fighter-min-continuity-score", default=0.55, type=float)
+    parser.add_argument("--locked-fighter-drop-confirmation-frames", default=15, type=int)
     parser.add_argument("--identity-switch-confirmation-frames", default=12, type=int)
     parser.add_argument("--confirmed-lock-min-frames", default=30, type=int)
     parser.add_argument("--arena-roi", default="0.2,0.1,0.8,0.9")
@@ -979,8 +988,19 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "fighter_a_name": args.fighter_a_name,
         "fighter_a_cues": {
             "start_side": args.fighter_a_start,
+            "reset_side": args.fighter_a_start,
             "white_uniform": True,
             "glove_color": args.fighter_a_glove_color,
+            "glove_positive_evidence": args.fighter_a_glove_color != "none"
+            or glove_settings["require_red"]
+            or glove_settings["require_white"]
+            or glove_settings["require_blue"],
+            "glove_rejection_only": args.fighter_a_glove_color == "none"
+            and (
+                glove_settings["reject_red"]
+                or glove_settings["reject_white"]
+                or glove_settings["reject_blue"]
+            ),
             "red_gloves": glove_settings["expect_red"],
             "white_gloves": glove_settings["expect_white"],
             "blue_gloves": glove_settings["expect_blue"],

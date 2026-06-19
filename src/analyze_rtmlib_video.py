@@ -65,14 +65,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--backend", choices=("rtmpose", "rtmw"), required=True)
     parser.add_argument("--fighter-a-name", default="Gabriel")
-    parser.add_argument("--fighter-a-start", choices=("left", "right"), default="left")
+    parser.add_argument(
+        "--fighter-a-start",
+        choices=("left", "right"),
+        default="left",
+        help="Side where Gabriel starts and resets after stoppages/lineups.",
+    )
     parser.add_argument("--fighter-a-black-belt", action="store_true")
     parser.add_argument("--fighter-a-taller", action="store_true")
     parser.add_argument(
         "--fighter-a-glove-color",
         choices=("red", "white", "blue", "none"),
         default="red",
-        help="Expected Gabriel glove color for this run. The selected color is required for initial lock/reset.",
+        help=(
+            "Expected Gabriel glove color for this run. The selected color is required for initial lock/reset; "
+            "'none' disables positive glove-color evidence while reject-glove flags still apply."
+        ),
     )
     parser.add_argument("--fighter-a-require-red-gloves", action="store_true")
     parser.add_argument("--fighter-a-require-white-gloves", action="store_true")
@@ -454,8 +462,19 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "fighter_a_name": args.fighter_a_name,
         "fighter_a_cues": {
             "start_side": args.fighter_a_start,
+            "reset_side": args.fighter_a_start,
             "white_uniform": True,
             "glove_color": args.fighter_a_glove_color,
+            "glove_positive_evidence": args.fighter_a_glove_color != "none"
+            or glove_settings["require_red"]
+            or glove_settings["require_white"]
+            or glove_settings["require_blue"],
+            "glove_rejection_only": args.fighter_a_glove_color == "none"
+            and (
+                glove_settings["reject_red"]
+                or glove_settings["reject_white"]
+                or glove_settings["reject_blue"]
+            ),
             "red_gloves": glove_settings["expect_red"],
             "white_gloves": glove_settings["expect_white"],
             "blue_gloves": glove_settings["expect_blue"],

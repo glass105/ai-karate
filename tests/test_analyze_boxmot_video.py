@@ -191,28 +191,49 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
 
         self.assertEqual(args.fighter_a_min_red_glove_score, 0.15)
         self.assertEqual(args.fighter_a_glove_color, "red")
+        self.assertEqual(args.fighter_a_start, "left")
         self.assertEqual(args.fighter_a_min_white_glove_score, 0.02)
         self.assertEqual(args.fighter_a_min_blue_glove_score, 0.15)
-        self.assertEqual(args.fighter_a_min_exclude_reference_match_score, 0.8)
-        self.assertEqual(args.fighter_a_min_exclude_body_match_score, 0.95)
+        self.assertEqual(args.fighter_a_min_exclude_reference_match_score, 0.9)
+        self.assertEqual(args.fighter_a_min_exclude_body_match_score, 0.97)
         self.assertEqual(args.fighter_a_min_exclude_face_match_score, 0.45)
         self.assertFalse(args.fighter_a_exclude_reference_hard_veto)
-        self.assertEqual(args.fighter_a_exclude_veto_confirmation_frames, 3)
-        self.assertFalse(args.fighter_a_exclude_allow_strong_face_match)
+        self.assertEqual(args.fighter_a_exclude_veto_confirmation_frames, 4)
+        self.assertTrue(args.fighter_a_exclude_allow_strong_face_match)
         self.assertEqual(args.fighter_a_min_face_match_score, 0.25)
-        self.assertEqual(args.fighter_a_strong_face_match_score, 0.70)
+        self.assertEqual(args.fighter_a_strong_face_match_score, 0.75)
         self.assertEqual(args.identity_recovery_confirmation_frames, 3)
         self.assertEqual(args.reset_to_start_side_after_missing, 10)
         self.assertEqual(args.lineup_pause_frames, 30)
         self.assertEqual(args.lineup_motion_threshold, 0.10)
         self.assertEqual(args.lineup_separation_threshold, 1.20)
-        self.assertEqual(args.locked_fighter_exclude_grace_score, 0.96)
-        self.assertEqual(args.locked_fighter_min_continuity_score, 0.60)
-        self.assertEqual(args.locked_fighter_drop_confirmation_frames, 10)
+        self.assertEqual(args.locked_fighter_exclude_grace_score, 0.98)
+        self.assertEqual(args.locked_fighter_min_continuity_score, 0.55)
+        self.assertEqual(args.locked_fighter_drop_confirmation_frames, 15)
         self.assertEqual(args.identity_switch_confirmation_frames, 12)
         self.assertEqual(args.confirmed_lock_min_frames, 30)
         self.assertEqual(args.face_match_backend, "insightface")
         self.assertEqual(args.deepface_detector_backend, "opencv")
+
+    def test_accepts_start_and_reset_side_parameter(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--input",
+                "input.mp4",
+                "--output-dir",
+                "out",
+                "--pose-backend",
+                "rtmw",
+                "--tracker",
+                "hybridsort",
+                "--fighter-a-start",
+                "right",
+            ]
+        )
+
+        self.assertEqual(args.fighter_a_start, "right")
 
     def test_accepts_selected_glove_color_and_thresholds(self) -> None:
         parser = build_parser()
@@ -265,6 +286,37 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertFalse(settings["reject_red"])
         self.assertFalse(settings["reject_white"])
         self.assertFalse(settings["reject_blue"])
+
+    def test_glove_none_keeps_gloves_as_rejection_only(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--input",
+                "input.mp4",
+                "--output-dir",
+                "out",
+                "--pose-backend",
+                "rtmw",
+                "--tracker",
+                "hybridsort",
+                "--fighter-a-glove-color",
+                "none",
+                "--fighter-a-reject-red-gloves",
+                "--fighter-a-reject-blue-gloves",
+            ]
+        )
+        settings = glove_color_settings(args)
+
+        self.assertFalse(settings["expect_red"])
+        self.assertFalse(settings["expect_white"])
+        self.assertFalse(settings["expect_blue"])
+        self.assertFalse(settings["require_red"])
+        self.assertFalse(settings["require_white"])
+        self.assertFalse(settings["require_blue"])
+        self.assertTrue(settings["reject_red"])
+        self.assertFalse(settings["reject_white"])
+        self.assertTrue(settings["reject_blue"])
 
     def test_accepts_deepface_arcface_backend(self) -> None:
         parser = build_parser()

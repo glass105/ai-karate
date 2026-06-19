@@ -19,7 +19,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default="yolo11n-pose.pt")
     parser.add_argument("--tracker", default="bytetrack.yaml")
     parser.add_argument("--fighter-a-name", default="Fighter A")
-    parser.add_argument("--fighter-a-start", choices=("left", "right"), default="left")
+    parser.add_argument(
+        "--fighter-a-start",
+        choices=("left", "right"),
+        default="left",
+        help="Side where Gabriel starts and resets after stoppages/lineups.",
+    )
     parser.add_argument("--fighter-a-red-gloves", action="store_true")
     parser.add_argument("--fighter-a-white-uniform", action="store_true")
     parser.add_argument("--fighter-a-black-belt", action="store_true")
@@ -306,6 +311,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "identity_recoveries": identity.recovery_count,
         "arena_roi": arena_roi,
         "fighter_a_cues": {
+            "start_side": args.fighter_a_start,
+            "reset_side": args.fighter_a_start,
             "red_gloves": args.fighter_a_red_gloves,
             "white_uniform": args.fighter_a_white_uniform,
             "black_belt": args.fighter_a_black_belt,
