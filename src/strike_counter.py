@@ -21,6 +21,7 @@ class StrikeDebug:
     kick_extension_delta: float = 0.0
     punch_extension_ratio: float = 0.0
     kick_extension_ratio: float = 0.0
+    punch_commitment_frames: int = 0
     punch_cooldown: int = 0
     kick_cooldown: int = 0
     punch_armed: bool = True
@@ -39,6 +40,7 @@ class StrikeDebug:
             "strike_kick_extension_delta": round(self.kick_extension_delta, 4),
             "strike_punch_extension_ratio": round(self.punch_extension_ratio, 4),
             "strike_kick_extension_ratio": round(self.kick_extension_ratio, 4),
+            "strike_punch_commitment_frames": self.punch_commitment_frames,
             "strike_punch_cooldown": self.punch_cooldown,
             "strike_kick_cooldown": self.kick_cooldown,
             "strike_punch_armed": self.punch_armed,
@@ -54,6 +56,7 @@ class LimbMotion:
     endpoint_motion: float = 0.0
     extension_delta: float = 0.0
     extension_ratio: float = 0.0
+    commitment_frames: int = 0
     score: float = 0.0
     details: dict[str, float] = field(default_factory=dict)
 
@@ -74,6 +77,8 @@ class StrikeCounter:
         min_kick_extension_delta: float = 12.0,
         min_punch_extension_ratio: float = 1.20,
         min_kick_extension_ratio: float = 1.20,
+        min_punch_commitment_frames: int = 5,
+        min_punch_commitment_ratio: float = 0.0,
         min_kick_foot_height_change: float = 0.0,
         min_strike_score: float = 1.0,
         strike_rearm_score: float = 0.60,
@@ -89,6 +94,10 @@ class StrikeCounter:
         self.min_kick_extension_delta = min_kick_extension_delta
         self.min_punch_extension_ratio = min_punch_extension_ratio
         self.min_kick_extension_ratio = min_kick_extension_ratio
+        self.min_punch_commitment_frames = max(1, min_punch_commitment_frames)
+        self.min_punch_commitment_ratio = (
+            min_punch_commitment_ratio if min_punch_commitment_ratio > 0 else min_punch_extension_ratio
+        )
         self.min_kick_foot_height_change = min_kick_foot_height_change
         self.min_strike_score = min_strike_score
         self.strike_rearm_score = strike_rearm_score
@@ -97,10 +106,10 @@ class StrikeCounter:
             lambda: deque(maxlen=self.history_frames)
         )
         self.cooldowns: dict[int, dict[str, int]] = defaultdict(
-            lambda: {"punch": 0, "kick": 0}
+            lambda: {"punch": 0, "fake_punch": 0, "kick": 0}
         )
         self.counts: dict[int, dict[str, int]] = defaultdict(
-            lambda: {"punches": 0, "kicks": 0}
+            lambda: {"punches": 0, "fake_punches": 0, "kicks": 0}
         )
         self.armed: dict[int, dict[str, bool]] = defaultdict(
             lambda: {"punch": True, "kick": True}
@@ -135,6 +144,7 @@ class StrikeCounter:
             kick_extension_delta=kick.extension_delta,
             punch_extension_ratio=punch.extension_ratio,
             kick_extension_ratio=kick.extension_ratio,
+            punch_commitment_frames=punch.commitment_frames,
             punch_cooldown=self.cooldowns[track_id]["punch"],
             kick_cooldown=self.cooldowns[track_id]["kick"],
             punch_armed=self.armed[track_id]["punch"],
@@ -160,6 +170,17 @@ class StrikeCounter:
                 debug.strike_rejection_reason = "punch_cooldown"
             elif not self.armed[track_id]["punch"]:
                 debug.strike_rejection_reason = "punch_not_rearmed"
+            elif punch.commitment_frames < self.min_punch_commitment_frames:
+                if self.cooldowns[track_id]["fake_punch"] > 0:
+                    debug.strike_rejection_reason = "fake_punch_cooldown"
+                else:
+                    self.counts[track_id]["fake_punches"] += 1
+                    self.cooldowns[track_id]["fake_punch"] = self.punch_cooldown_frames
+                    debug.strike_candidate_type = "fake_punch"
+                    debug.strike_confirmed = True
+                    debug.strike_rejection_reason = "fake_punch"
+                    self.last_debug[track_id] = debug
+                    return "fake_punch"
             else:
                 self.counts[track_id]["punches"] += 1
                 self.cooldowns[track_id]["punch"] = self.punch_cooldown_frames
@@ -203,27 +224,46 @@ class StrikeCounter:
             self.armed[track_id][strike_type] = True
 
     def _tick_cooldowns(self, track_id: int) -> None:
-        for strike_type in ("punch", "kick"):
+        for strike_type in ("punch", "fake_punch", "kick"):
             current = self.cooldowns[track_id][strike_type]
             self.cooldowns[track_id][strike_type] = max(0, current - 1)
 
     def _punch_motion(self, track_id: int) -> LimbMotion:
         old, new = self.history[track_id][0], self.history[track_id][-1]
-        return max(
-            (
-                self._limb_motion(
-                    old[shoulder],
-                    old[wrist],
-                    new[shoulder],
-                    new[wrist],
-                    self.min_punch_endpoint_motion,
-                    self.min_punch_extension_delta,
-                    self.min_punch_extension_ratio,
-                )
-                for shoulder, wrist in ((5, 9), (6, 10))
-            ),
-            key=lambda motion: motion.score,
-        )
+        candidates: list[LimbMotion] = []
+        for shoulder, wrist in ((5, 9), (6, 10)):
+            motion = self._limb_motion(
+                old[shoulder],
+                old[wrist],
+                new[shoulder],
+                new[wrist],
+                self.min_punch_endpoint_motion,
+                self.min_punch_extension_delta,
+                self.min_punch_extension_ratio,
+            )
+            motion.commitment_frames = self._punch_commitment_frames(track_id, shoulder, wrist)
+            candidates.append(motion)
+        return max(candidates, key=lambda motion: motion.score)
+
+    def _punch_commitment_frames(self, track_id: int, shoulder: int, wrist: int) -> int:
+        first = self.history[track_id][0]
+        old_extension = dist(self._xy(first[shoulder]), self._xy(first[wrist]))
+        if old_extension <= 1e-6:
+            return 0
+
+        committed = 0
+        for keypoints in reversed(self.history[track_id]):
+            extension = dist(self._xy(keypoints[shoulder]), self._xy(keypoints[wrist]))
+            extension_delta = extension - old_extension
+            extension_ratio = extension / old_extension
+            if (
+                extension_delta >= self.min_punch_extension_delta
+                and extension_ratio >= self.min_punch_commitment_ratio
+            ):
+                committed += 1
+            else:
+                break
+        return committed
 
     def _kick_motion(self, track_id: int) -> LimbMotion:
         old, new = self.history[track_id][0], self.history[track_id][-1]
@@ -306,6 +346,7 @@ class StrikeCounter:
             endpoint_motion=endpoint_motion,
             extension_delta=extension_delta,
             extension_ratio=extension_ratio,
+            commitment_frames=1 if score > 0 else 0,
             score=max(0.0, score),
             details={"height_change": height_change},
         )
@@ -347,6 +388,7 @@ class StrikeCounter:
             endpoint_motion=endpoint_motion,
             extension_delta=extension_delta,
             extension_ratio=extension_ratio,
+            commitment_frames=1 if score > 0 else 0,
             score=max(0.0, score),
             details={"height_change": height_change},
         )

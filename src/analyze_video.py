@@ -205,7 +205,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "estimated_action",
     ]
     frame_count = 0
-    named_counts = {"punches": 0, "kicks": 0}
+    named_counts = {"punches": 0, "fake_punches": 0, "kicks": 0}
     with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
         csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         csv_writer.writeheader()
@@ -281,7 +281,9 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 action = counter.update(track_id, points)
                 fighter_label = identity.label(track_id)
                 if fighter_label == args.fighter_a_name and action:
-                    named_counts[f"{action}es" if action == "punch" else "kicks"] += 1
+                    action_key = {"punch": "punches", "fake_punch": "fake_punches", "kick": "kicks"}.get(action)
+                    if action_key:
+                        named_counts[action_key] += 1
                 csv_writer.writerow(
                     {
                         "frame": frame_count,

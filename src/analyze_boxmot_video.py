@@ -164,6 +164,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-kick-extension-delta", default=12.0, type=float)
     parser.add_argument("--min-punch-extension-ratio", default=1.20, type=float)
     parser.add_argument("--min-kick-extension-ratio", default=1.20, type=float)
+    parser.add_argument(
+        "--min-punch-commitment-frames",
+        default=5,
+        type=int,
+        help="Consecutive ending frames the arm must stay extended before a punch is counted as real.",
+    )
+    parser.add_argument(
+        "--min-punch-commitment-ratio",
+        default=0.0,
+        type=float,
+        help="Extension ratio for committed punch frames; 0 reuses --min-punch-extension-ratio.",
+    )
     parser.add_argument("--min-kick-foot-height-change", default=0.0, type=float)
     parser.add_argument("--strike-min-score", default=1.0, type=float)
     parser.add_argument("--strike-rearm-score", default=0.60, type=float)
@@ -677,6 +689,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         min_kick_extension_delta=args.min_kick_extension_delta,
         min_punch_extension_ratio=args.min_punch_extension_ratio,
         min_kick_extension_ratio=args.min_kick_extension_ratio,
+        min_punch_commitment_frames=args.min_punch_commitment_frames,
+        min_punch_commitment_ratio=args.min_punch_commitment_ratio,
         min_kick_foot_height_change=args.min_kick_foot_height_change,
         min_strike_score=args.strike_min_score,
         strike_rearm_score=args.strike_rearm_score,
@@ -733,7 +747,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     )
     frame_count = 0
     gabriel_frames = 0
-    named_counts = {"punches": 0, "kicks": 0}
+    named_counts = {"punches": 0, "fake_punches": 0, "kicks": 0}
     fieldnames = [
         "frame", "timestamp_seconds", "track_id", "fighter_label", "confidence",
         "bbox", "keypoints", "red_glove_score", "white_glove_score", "blue_glove_score", "white_uniform_score",
@@ -747,7 +761,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "id_confirmed_not_top", "id_hard_reject_active", "id_rejection_reason", "id_visual_state",
         "strike_punch_score", "strike_kick_score", "strike_punch_endpoint_motion", "strike_kick_endpoint_motion",
         "strike_punch_extension_delta", "strike_kick_extension_delta", "strike_punch_extension_ratio",
-        "strike_kick_extension_ratio", "strike_punch_cooldown", "strike_kick_cooldown",
+        "strike_kick_extension_ratio", "strike_punch_commitment_frames", "strike_punch_cooldown", "strike_kick_cooldown",
         "strike_punch_armed", "strike_kick_armed", "strike_candidate_type", "strike_confirmed",
         "strike_rejection_reason",
         "estimated_action",
@@ -923,7 +937,9 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 if score is not None:
                     visual_state = "confirmed" if score.confirmed else "tentative" if score.tentative else "candidate"
                 if label == args.fighter_a_name and action:
-                    named_counts[f"{action}es" if action == "punch" else "kicks"] += 1
+                    action_key = {"punch": "punches", "fake_punch": "fake_punches", "kick": "kicks"}.get(action)
+                    if action_key:
+                        named_counts[action_key] += 1
                 csv_writer.writerow(
                     {
                         "frame": frame_count,
@@ -1068,6 +1084,12 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "min_kick_extension_delta": args.min_kick_extension_delta,
             "min_punch_extension_ratio": args.min_punch_extension_ratio,
             "min_kick_extension_ratio": args.min_kick_extension_ratio,
+            "min_punch_commitment_frames": args.min_punch_commitment_frames,
+            "min_punch_commitment_ratio": (
+                args.min_punch_commitment_ratio
+                if args.min_punch_commitment_ratio > 0
+                else args.min_punch_extension_ratio
+            ),
             "min_kick_foot_height_change": args.min_kick_foot_height_change,
             "strike_min_score": args.strike_min_score,
             "strike_rearm_score": args.strike_rearm_score,
