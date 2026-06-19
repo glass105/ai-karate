@@ -365,6 +365,51 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertEqual(selected, 20)
         self.assertEqual(identity.label(20), "Gabriel")
 
+    def test_confirmed_lock_requires_switch_confirmation_for_strong_replacement(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "right",
+            confirmed_lock_min_frames=3,
+            identity_switch_confirmation_frames=2,
+        )
+        locked = [TrackedBox(3, 700, 300, 800, 500, appearance=(1, 0))]
+        self.assertEqual(identity.observe(locked), 3)
+        self.assertEqual(identity.observe(locked), 3)
+        self.assertEqual(identity.observe(locked), 3)
+
+        replacement = [TrackedBox(2, 705, 300, 805, 500, appearance=(1, 0))]
+        selected = identity.observe(replacement)
+
+        self.assertIsNone(selected)
+        self.assertEqual(identity.fighter_a_track_id, 3)
+        self.assertEqual(identity.label(2), "fighter-2")
+        self.assertEqual(identity.visual_track_id, 2)
+        self.assertTrue(identity.visual_tentative)
+
+    def test_confirmed_lock_reselects_original_id_before_missing_reset_window(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "right",
+            confirmed_lock_min_frames=3,
+            identity_switch_confirmation_frames=2,
+            reset_after_missing_frames=5,
+        )
+        locked = [TrackedBox(3, 700, 300, 800, 500, appearance=(1, 0))]
+        identity.observe(locked)
+        identity.observe(locked)
+        identity.observe(locked)
+
+        replacement = [TrackedBox(2, 705, 300, 805, 500, appearance=(1, 0))]
+        self.assertIsNone(identity.observe(replacement))
+        self.assertIsNone(identity.observe(replacement))
+
+        selected = identity.observe([TrackedBox(3, 702, 300, 802, 500, appearance=(1, 0))])
+
+        self.assertEqual(selected, 3)
+        self.assertEqual(identity.fighter_a_track_id, 3)
+        self.assertEqual(identity.label(3), "Gabriel")
+        self.assertEqual(identity.recovery_count, 0)
+
     def test_ignores_small_background_person_during_recovery(self) -> None:
         identity = FighterIdentity(
             "Gabriel",

@@ -325,7 +325,16 @@ class FighterIdentity:
             if not self._set_tentative_visual(active_fighters):
                 self._set_grace_visual()
             return None
-        if score <= self.strong_recovery_threshold:
+        confirmed_lock_switch = (
+            selected.track_id != self.fighter_a_track_id
+            and self._lock_frames >= self.confirmed_lock_min_frames
+        )
+        if confirmed_lock_switch and not resetting:
+            self._pending_track_id = selected.track_id
+            self._pending_frames = 0
+            self._mark_visual(selected, tentative=True)
+            return None
+        if score <= self.strong_recovery_threshold and not confirmed_lock_switch:
             if selected.track_id != self.fighter_a_track_id:
                 self.recovery_count += 1
             if resetting:
