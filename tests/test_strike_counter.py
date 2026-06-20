@@ -102,6 +102,59 @@ class StrikeCounterTests(unittest.TestCase):
         self.assertEqual(counter.update(1, second), "kick")
         self.assertEqual(counter.counts[1]["kicks"], 1)
 
+    def test_counts_kick_when_opponent_is_close(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            max_kick_opponent_distance_body_heights=0.75,
+        )
+        first = pose()
+        first[11] = [0, 0]
+        first[15] = [20, 0]
+        second = pose()
+        second[11] = [0, 0]
+        second[15] = [60, 0]
+
+        self.assertEqual(counter.update(1, first, opponent_distance_body_heights=0.5), "")
+        self.assertEqual(counter.update(1, second, opponent_distance_body_heights=0.5), "kick")
+        self.assertEqual(counter.last_debug[1].kick_opponent_distance_body_heights, 0.5)
+
+    def test_rejects_kick_when_opponent_is_too_far(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            max_kick_opponent_distance_body_heights=0.75,
+        )
+        first = pose()
+        first[11] = [0, 0]
+        first[15] = [20, 0]
+        second = pose()
+        second[11] = [0, 0]
+        second[15] = [60, 0]
+
+        self.assertEqual(counter.update(1, first, opponent_distance_body_heights=1.0), "")
+        self.assertEqual(counter.update(1, second, opponent_distance_body_heights=1.0), "")
+        self.assertEqual(counter.counts[1]["kicks"], 0)
+        self.assertEqual(counter.last_debug[1].strike_rejection_reason, "kick_opponent_too_far")
+
+    def test_rejects_kick_when_no_opponent_is_available(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            max_kick_opponent_distance_body_heights=0.75,
+        )
+        first = pose()
+        first[11] = [0, 0]
+        first[15] = [20, 0]
+        second = pose()
+        second[11] = [0, 0]
+        second[15] = [60, 0]
+
+        self.assertEqual(counter.update(1, first), "")
+        self.assertEqual(counter.update(1, second), "")
+        self.assertEqual(counter.counts[1]["kicks"], 0)
+        self.assertEqual(counter.last_debug[1].strike_rejection_reason, "kick_no_opponent")
+
     def test_counts_foot_travel_with_height_change_as_kick(self) -> None:
         counter = StrikeCounter(
             fps=30,

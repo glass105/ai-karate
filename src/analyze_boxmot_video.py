@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from pathlib import Path
 from types import MethodType
 from typing import Any
@@ -177,6 +178,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Extension ratio for committed punch frames; 0 reuses --min-punch-extension-ratio.",
     )
     parser.add_argument("--min-kick-foot-height-change", default=0.0, type=float)
+    parser.add_argument(
+        "--max-kick-opponent-distance-body-heights",
+        default=0.75,
+        type=float,
+        help=(
+            "Maximum center distance to the other active fighter, normalized by the average fighter box height, "
+            "for counting kicks; 0 disables the gate."
+        ),
+    )
     parser.add_argument("--strike-min-score", default=1.0, type=float)
     parser.add_argument("--strike-rearm-score", default=0.60, type=float)
     parser.add_argument("--min-strike-score-gap", default=0.10, type=float)
@@ -605,6 +615,29 @@ def competition_fighter_score(
     return 1.0
 
 
+def opponent_distance_body_heights(
+    fighter: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> float | None:
+    """Return normalized center distance to the nearest competition fighter candidate."""
+    x1, y1, x2, y2 = fighter["box"]
+    fighter_height = max(1.0, float(y2 - y1))
+    fighter_center = ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
+    distances = []
+    for candidate in candidates:
+        if candidate["track_id"] == fighter["track_id"]:
+            continue
+        if candidate.get("competition_fighter_score", 0.0) < 1.0:
+            continue
+        other_x1, other_y1, other_x2, other_y2 = candidate["box"]
+        other_height = max(1.0, float(other_y2 - other_y1))
+        other_center = ((other_x1 + other_x2) / 2.0, (other_y1 + other_y2) / 2.0)
+        center_distance = math.dist(fighter_center, other_center)
+        average_height = (fighter_height + other_height) / 2.0
+        distances.append(center_distance / average_height)
+    return min(distances) if distances else None
+
+
 def analyze(args: argparse.Namespace) -> dict[str, Any]:
     if not args.input.exists():
         raise SystemExit(f"Input video not found: {args.input}")
@@ -692,6 +725,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         min_punch_commitment_frames=args.min_punch_commitment_frames,
         min_punch_commitment_ratio=args.min_punch_commitment_ratio,
         min_kick_foot_height_change=args.min_kick_foot_height_change,
+        max_kick_opponent_distance_body_heights=args.max_kick_opponent_distance_body_heights,
         min_strike_score=args.strike_min_score,
         strike_rearm_score=args.strike_rearm_score,
         min_strike_score_gap=args.min_strike_score_gap,
@@ -761,7 +795,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "id_confirmed_not_top", "id_hard_reject_active", "id_rejection_reason", "id_visual_state",
         "strike_punch_score", "strike_kick_score", "strike_punch_endpoint_motion", "strike_kick_endpoint_motion",
         "strike_punch_extension_delta", "strike_kick_extension_delta", "strike_punch_extension_ratio",
-        "strike_kick_extension_ratio", "strike_punch_commitment_frames", "strike_punch_cooldown", "strike_kick_cooldown",
+        "strike_kick_extension_ratio", "strike_kick_opponent_distance_body_heights",
+        "strike_punch_commitment_frames", "strike_punch_cooldown", "strike_kick_cooldown",
         "strike_punch_armed", "strike_kick_armed", "strike_candidate_type", "strike_confirmed",
         "strike_rejection_reason",
         "estimated_action",
@@ -926,10 +961,16 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             for candidate in tracked:
                 track_id = candidate["track_id"]
                 label = identity.label(track_id)
+                kick_opponent_distance = (
+                    opponent_distance_body_heights(candidate, tracked)
+                    if label == args.fighter_a_name
+                    else None
+                )
                 action = counter.update(
                     track_id,
                     candidate["keypoints"],
                     count_enabled=label == args.fighter_a_name,
+                    opponent_distance_body_heights=kick_opponent_distance,
                 )
                 strike_debug = counter.last_debug[track_id]
                 score = identity_scores.get(track_id)
@@ -1091,6 +1132,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 else args.min_punch_extension_ratio
             ),
             "min_kick_foot_height_change": args.min_kick_foot_height_change,
+            "max_kick_opponent_distance_body_heights": args.max_kick_opponent_distance_body_heights,
             "strike_min_score": args.strike_min_score,
             "strike_rearm_score": args.strike_rearm_score,
             "min_strike_score_gap": args.min_strike_score_gap,

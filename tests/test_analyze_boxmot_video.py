@@ -11,6 +11,7 @@ from src.analyze_boxmot_video import (
     detections_array,
     glove_color_settings,
     load_reference_descriptors,
+    opponent_distance_body_heights,
     patch_rtm_fp16_input,
     reference_match_score,
     rtm_candidates,
@@ -214,6 +215,21 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.confirmed_lock_min_frames, 30)
         self.assertEqual(args.face_match_backend, "insightface")
         self.assertEqual(args.deepface_detector_backend, "opencv")
+        self.assertEqual(args.max_kick_opponent_distance_body_heights, 0.75)
+
+    def test_normalizes_opponent_distance_by_average_fighter_height(self) -> None:
+        fighter = {"track_id": 7, "box": (0, 0, 100, 200), "competition_fighter_score": 1.0}
+        opponent = {"track_id": 8, "box": (150, 0, 250, 200), "competition_fighter_score": 1.0}
+
+        distance = opponent_distance_body_heights(fighter, [fighter, opponent])
+
+        self.assertEqual(distance, 0.75)
+
+    def test_ignores_noncompetition_opponent_candidates(self) -> None:
+        fighter = {"track_id": 7, "box": (0, 0, 100, 200), "competition_fighter_score": 1.0}
+        opponent = {"track_id": 8, "box": (150, 0, 250, 200), "competition_fighter_score": 0.0}
+
+        self.assertIsNone(opponent_distance_body_heights(fighter, [fighter, opponent]))
 
     def test_accepts_start_and_reset_side_parameter(self) -> None:
         parser = build_parser()

@@ -21,6 +21,7 @@ class StrikeDebug:
     kick_extension_delta: float = 0.0
     punch_extension_ratio: float = 0.0
     kick_extension_ratio: float = 0.0
+    kick_opponent_distance_body_heights: float | None = None
     punch_commitment_frames: int = 0
     punch_cooldown: int = 0
     kick_cooldown: int = 0
@@ -40,6 +41,11 @@ class StrikeDebug:
             "strike_kick_extension_delta": round(self.kick_extension_delta, 4),
             "strike_punch_extension_ratio": round(self.punch_extension_ratio, 4),
             "strike_kick_extension_ratio": round(self.kick_extension_ratio, 4),
+            "strike_kick_opponent_distance_body_heights": (
+                round(self.kick_opponent_distance_body_heights, 4)
+                if self.kick_opponent_distance_body_heights is not None
+                else ""
+            ),
             "strike_punch_commitment_frames": self.punch_commitment_frames,
             "strike_punch_cooldown": self.punch_cooldown,
             "strike_kick_cooldown": self.kick_cooldown,
@@ -80,6 +86,7 @@ class StrikeCounter:
         min_punch_commitment_frames: int = 5,
         min_punch_commitment_ratio: float = 0.0,
         min_kick_foot_height_change: float = 0.0,
+        max_kick_opponent_distance_body_heights: float = 0.0,
         min_strike_score: float = 1.0,
         strike_rearm_score: float = 0.60,
         min_strike_score_gap: float = 0.10,
@@ -99,6 +106,7 @@ class StrikeCounter:
             min_punch_commitment_ratio if min_punch_commitment_ratio > 0 else min_punch_extension_ratio
         )
         self.min_kick_foot_height_change = min_kick_foot_height_change
+        self.max_kick_opponent_distance_body_heights = max(0.0, max_kick_opponent_distance_body_heights)
         self.min_strike_score = min_strike_score
         self.strike_rearm_score = strike_rearm_score
         self.min_strike_score_gap = min_strike_score_gap
@@ -116,7 +124,13 @@ class StrikeCounter:
         )
         self.last_debug: dict[int, StrikeDebug] = defaultdict(StrikeDebug)
 
-    def update(self, track_id: int, keypoints: Keypoints, count_enabled: bool = True) -> str:
+    def update(
+        self,
+        track_id: int,
+        keypoints: Keypoints,
+        count_enabled: bool = True,
+        opponent_distance_body_heights: float | None = None,
+    ) -> str:
         if track_id < 0 or len(keypoints) < 17:
             self.last_debug[track_id] = StrikeDebug(strike_rejection_reason="invalid_pose")
             return ""
@@ -127,6 +141,7 @@ class StrikeCounter:
             self.last_debug[track_id] = StrikeDebug(
                 punch_cooldown=self.cooldowns[track_id]["punch"],
                 kick_cooldown=self.cooldowns[track_id]["kick"],
+                kick_opponent_distance_body_heights=opponent_distance_body_heights,
                 strike_rejection_reason="history_warmup",
             )
             return ""
@@ -144,6 +159,7 @@ class StrikeCounter:
             kick_extension_delta=kick.extension_delta,
             punch_extension_ratio=punch.extension_ratio,
             kick_extension_ratio=kick.extension_ratio,
+            kick_opponent_distance_body_heights=opponent_distance_body_heights,
             punch_commitment_frames=punch.commitment_frames,
             punch_cooldown=self.cooldowns[track_id]["punch"],
             kick_cooldown=self.cooldowns[track_id]["kick"],
@@ -195,7 +211,17 @@ class StrikeCounter:
             return ""
 
         if action == "kick" and kick.score >= self.min_strike_score:
-            if self.cooldowns[track_id]["kick"] > 0:
+            if (
+                self.max_kick_opponent_distance_body_heights > 0
+                and opponent_distance_body_heights is None
+            ):
+                debug.strike_rejection_reason = "kick_no_opponent"
+            elif (
+                self.max_kick_opponent_distance_body_heights > 0
+                and opponent_distance_body_heights > self.max_kick_opponent_distance_body_heights
+            ):
+                debug.strike_rejection_reason = "kick_opponent_too_far"
+            elif self.cooldowns[track_id]["kick"] > 0:
                 debug.strike_rejection_reason = "kick_cooldown"
             elif not self.armed[track_id]["kick"]:
                 debug.strike_rejection_reason = "kick_not_rearmed"
