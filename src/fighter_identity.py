@@ -130,6 +130,7 @@ class FighterIdentity:
         min_red_glove_score: float = 0.15,
         min_white_glove_score: float = 0.02,
         min_blue_glove_score: float = 0.15,
+        glove_reject_hold_frames: int = 5,
         min_standing_score: float = 0.45,
         min_reference_match_score: float = 0.05,
         min_face_match_score: float = 0.25,
@@ -165,6 +166,8 @@ class FighterIdentity:
             raise ValueError("locked_fighter_drop_confirmation_frames must be at least 1")
         if exclude_veto_confirmation_frames < 1:
             raise ValueError("exclude_veto_confirmation_frames must be at least 1")
+        if glove_reject_hold_frames < 1:
+            raise ValueError("glove_reject_hold_frames must be at least 1")
         if identity_switch_confirmation_frames is not None and identity_switch_confirmation_frames < 1:
             raise ValueError("identity_switch_confirmation_frames must be at least 1")
         if confirmed_lock_min_frames < 1:
@@ -197,6 +200,7 @@ class FighterIdentity:
         self.min_red_glove_score = min_red_glove_score
         self.min_white_glove_score = min_white_glove_score
         self.min_blue_glove_score = min_blue_glove_score
+        self.glove_reject_hold_frames = glove_reject_hold_frames
         self.min_standing_score = min_standing_score
         self.min_reference_match_score = min_reference_match_score
         self.min_face_match_score = min_face_match_score
@@ -249,9 +253,11 @@ class FighterIdentity:
         self._lock_frames = 0
         self._drop_reason: str | None = None
         self._drop_frames = 0
+        self._glove_reject_state: dict[int, tuple[str, int]] = {}
 
     def observe(self, boxes: Iterable[TrackedBox]) -> int | None:
         boxes = list(boxes)
+        self._update_glove_reject_state(boxes)
         if not boxes:
             self._missing_frames += 1
             self._visible_track_id = None
@@ -566,18 +572,7 @@ class FighterIdentity:
                 or box.blue_glove_score >= self.min_blue_glove_score
                 or (allow_soft_red and self._has_strong_continuity(box))
             )
-            and (
-                not self.reject_red_gloves
-                or box.red_glove_score < max(box.white_glove_score, box.blue_glove_score)
-            )
-            and (
-                not self.reject_white_gloves
-                or box.white_glove_score < max(box.red_glove_score, box.blue_glove_score)
-            )
-            and (
-                not self.reject_blue_gloves
-                or box.blue_glove_score < max(box.red_glove_score, box.white_glove_score)
-            )
+            and not self._glove_rejection_reason(box)
             and (not self.require_standing or box.standing_score >= self.min_standing_score)
             and (not self.require_competition_fighter or box.competition_fighter_score >= 1.0)
             and (
@@ -717,12 +712,9 @@ class FighterIdentity:
             return "not_active_fighter_pair"
         if self.require_competition_fighter and box.competition_fighter_score < 1.0:
             return "not_competition_fighter"
-        if self.reject_red_gloves and box.red_glove_score >= max(box.white_glove_score, box.blue_glove_score):
-            return "red_glove"
-        if self.reject_white_gloves and box.white_glove_score >= max(box.red_glove_score, box.blue_glove_score):
-            return "white_glove"
-        if self.reject_blue_gloves and box.blue_glove_score >= max(box.red_glove_score, box.white_glove_score):
-            return "blue_glove"
+        glove_reason = self._glove_rejection_reason(box)
+        if glove_reason:
+            return glove_reason
         if self.require_standing and box.standing_score < self.min_standing_score:
             return "not_standing"
         if self.reject_face_mismatch and box.face_detected and box.face_match_score < self.min_face_match_score:
@@ -746,6 +738,34 @@ class FighterIdentity:
                 return "blue_below_threshold_continuity_ok"
             return "blue_below_threshold"
         return ""
+
+    def _raw_glove_rejection_reason(self, box: TrackedBox) -> str:
+        matches = []
+        if self.reject_red_gloves and box.red_glove_score >= self.min_red_glove_score:
+            matches.append((box.red_glove_score / max(self.min_red_glove_score, 1e-6), "red_glove"))
+        if self.reject_white_gloves and box.white_glove_score >= self.min_white_glove_score:
+            matches.append((box.white_glove_score / max(self.min_white_glove_score, 1e-6), "white_glove"))
+        if self.reject_blue_gloves and box.blue_glove_score >= self.min_blue_glove_score:
+            matches.append((box.blue_glove_score / max(self.min_blue_glove_score, 1e-6), "blue_glove"))
+        return max(matches)[1] if matches else ""
+
+    def _glove_rejection_reason(self, box: TrackedBox) -> str:
+        raw_reason = self._raw_glove_rejection_reason(box)
+        if raw_reason:
+            return raw_reason
+        state = self._glove_reject_state.get(box.track_id)
+        return state[0] if state is not None else ""
+
+    def _update_glove_reject_state(self, boxes: list[TrackedBox]) -> None:
+        for track_id, (reason, remaining) in list(self._glove_reject_state.items()):
+            if remaining <= 1:
+                del self._glove_reject_state[track_id]
+            else:
+                self._glove_reject_state[track_id] = (reason, remaining - 1)
+        for box in boxes:
+            reason = self._raw_glove_rejection_reason(box)
+            if reason:
+                self._glove_reject_state[box.track_id] = (reason, self.glove_reject_hold_frames)
 
     def _is_hard_reject(self, reason: str) -> bool:
         return reason in {

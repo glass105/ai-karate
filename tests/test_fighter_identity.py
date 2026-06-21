@@ -210,6 +210,49 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertEqual(selected, 10)
         self.assertEqual(identity.identity_scores[20].rejection_reason, "red_glove")
 
+    def test_rejects_glove_color_at_threshold_even_when_another_color_scores_higher(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_red_gloves=True,
+            min_red_glove_score=0.15,
+        )
+
+        selected = identity.observe(
+            [
+                TrackedBox(10, 100, 0, 300, 400, red_glove_score=0.20, white_glove_score=0.80),
+                TrackedBox(20, 500, 0, 700, 400, red_glove_score=0.00, white_glove_score=0.80),
+            ]
+        )
+
+        self.assertEqual(selected, 20)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "red_glove")
+        self.assertTrue(identity.identity_scores[10].hard_reject_active)
+
+    def test_glove_rejection_persists_after_brief_score_drop(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_red_gloves=True,
+            min_red_glove_score=0.15,
+            glove_reject_hold_frames=3,
+            recovery_confirmation_frames=1,
+        )
+        clean = TrackedBox(20, 500, 0, 700, 400, white_glove_score=0.80)
+        identity.observe([TrackedBox(10, 100, 0, 300, 400, white_glove_score=0.80), clean])
+
+        identity.observe(
+            [TrackedBox(10, 100, 0, 300, 400, red_glove_score=0.20, white_glove_score=0.80), clean]
+        )
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "red_glove")
+
+        for _ in range(2):
+            identity.observe([TrackedBox(10, 100, 0, 300, 400, white_glove_score=0.80), clean])
+            self.assertEqual(identity.identity_scores[10].rejection_reason, "red_glove")
+
+        identity.observe([TrackedBox(10, 100, 0, 300, 400, white_glove_score=0.80), clean])
+        self.assertNotEqual(identity.identity_scores[10].rejection_reason, "red_glove")
+
     def test_rejects_blue_gloves_during_recovery(self) -> None:
         identity = FighterIdentity(
             "Gabriel",

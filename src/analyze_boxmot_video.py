@@ -135,6 +135,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-min-red-glove-score", default=0.15, type=float)
     parser.add_argument("--fighter-a-min-white-glove-score", default=0.02, type=float)
     parser.add_argument("--fighter-a-min-blue-glove-score", default=0.15, type=float)
+    parser.add_argument(
+        "--fighter-a-glove-reject-hold-frames",
+        default=5,
+        type=int,
+        help="Keep a threshold-triggered glove-color veto active for this many frames.",
+    )
     parser.add_argument("--fighter-a-min-standing-score", default=0.45, type=float)
     parser.add_argument("--experiment-label")
     parser.add_argument("--reset-to-start-side-after-missing", default=10, type=int)
@@ -759,6 +765,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         min_red_glove_score=args.fighter_a_min_red_glove_score,
         min_white_glove_score=args.fighter_a_min_white_glove_score,
         min_blue_glove_score=args.fighter_a_min_blue_glove_score,
+        glove_reject_hold_frames=args.fighter_a_glove_reject_hold_frames,
         min_standing_score=args.fighter_a_min_standing_score,
         min_reference_match_score=args.fighter_a_min_reference_match_score,
         min_face_match_score=args.fighter_a_min_face_match_score,
@@ -1086,6 +1093,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "min_red_glove_score": args.fighter_a_min_red_glove_score,
             "min_white_glove_score": args.fighter_a_min_white_glove_score,
             "min_blue_glove_score": args.fighter_a_min_blue_glove_score,
+            "glove_reject_hold_frames": args.fighter_a_glove_reject_hold_frames,
             "min_standing_score": args.fighter_a_min_standing_score,
             "min_reference_match_score": args.fighter_a_min_reference_match_score,
             "min_face_match_score": args.fighter_a_min_face_match_score,
