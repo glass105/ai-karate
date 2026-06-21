@@ -278,7 +278,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             for _, box, tracked, points in accepted:
                 track_id = tracked.track_id
                 xyxy = [tracked.x1, tracked.y1, tracked.x2, tracked.y2]
-                action = counter.update(track_id, points)
+                action = counter.update(track_id, points, frame_index=frame_count)
                 fighter_label = identity.label(track_id)
                 if fighter_label == args.fighter_a_name and action:
                     action_key = {"punch": "punches", "fake_punch": "fake_punches", "kick": "kicks"}.get(action)

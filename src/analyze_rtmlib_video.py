@@ -428,7 +428,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     cv2.putText(annotated, args.fighter_a_name, (x1, max(20, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             for candidate in candidates:
                 track_id = candidate["track_id"]
-                action = counter.update(track_id, candidate["keypoints"])
+                action = counter.update(track_id, candidate["keypoints"], frame_index=frame_count)
                 fighter_label = identity.label(track_id)
                 if fighter_label == args.fighter_a_name and action:
                     action_key = {"punch": "punches", "fake_punch": "fake_punches", "kick": "kicks"}.get(action)

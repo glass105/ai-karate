@@ -183,7 +183,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         help="Extension ratio for committed punch frames; 0 reuses --min-punch-extension-ratio.",
     )
-    parser.add_argument("--min-kick-foot-height-change", default=0.0, type=float)
+    parser.add_argument(
+        "--min-kick-commitment-frames",
+        default=2,
+        type=int,
+        help="Consecutive ending observations that must satisfy the kick motion gates.",
+    )
+    parser.add_argument("--min-kick-foot-height-change", default=20.0, type=float)
     parser.add_argument(
         "--max-kick-opponent-distance-body-heights",
         default=0.75,
@@ -730,6 +736,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         min_kick_extension_ratio=args.min_kick_extension_ratio,
         min_punch_commitment_frames=args.min_punch_commitment_frames,
         min_punch_commitment_ratio=args.min_punch_commitment_ratio,
+        min_kick_commitment_frames=args.min_kick_commitment_frames,
         min_kick_foot_height_change=args.min_kick_foot_height_change,
         max_kick_opponent_distance_body_heights=args.max_kick_opponent_distance_body_heights,
         min_strike_score=args.strike_min_score,
@@ -802,8 +809,10 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "id_confirmed_not_top", "id_hard_reject_active", "id_rejection_reason", "id_visual_state",
         "strike_punch_score", "strike_kick_score", "strike_punch_endpoint_motion", "strike_kick_endpoint_motion",
         "strike_punch_extension_delta", "strike_kick_extension_delta", "strike_punch_extension_ratio",
-        "strike_kick_extension_ratio", "strike_kick_opponent_distance_body_heights",
-        "strike_punch_commitment_frames", "strike_punch_cooldown", "strike_kick_cooldown",
+        "strike_kick_extension_ratio", "strike_kick_foot_height_change",
+        "strike_kick_opponent_distance_body_heights",
+        "strike_punch_commitment_frames", "strike_kick_commitment_frames",
+        "strike_punch_cooldown", "strike_kick_cooldown",
         "strike_punch_armed", "strike_kick_armed", "strike_candidate_type", "strike_confirmed",
         "strike_rejection_reason",
         "estimated_action",
@@ -978,6 +987,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                     candidate["keypoints"],
                     count_enabled=label == args.fighter_a_name,
                     opponent_distance_body_heights=kick_opponent_distance,
+                    frame_index=frame_count,
                 )
                 strike_debug = counter.last_debug[track_id]
                 score = identity_scores.get(track_id)
@@ -1139,6 +1149,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 if args.min_punch_commitment_ratio > 0
                 else args.min_punch_extension_ratio
             ),
+            "min_kick_commitment_frames": args.min_kick_commitment_frames,
             "min_kick_foot_height_change": args.min_kick_foot_height_change,
             "max_kick_opponent_distance_body_heights": args.max_kick_opponent_distance_body_heights,
             "strike_min_score": args.strike_min_score,

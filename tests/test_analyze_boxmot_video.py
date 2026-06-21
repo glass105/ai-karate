@@ -215,6 +215,8 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.confirmed_lock_min_frames, 30)
         self.assertEqual(args.face_match_backend, "insightface")
         self.assertEqual(args.deepface_detector_backend, "opencv")
+        self.assertEqual(args.min_kick_commitment_frames, 2)
+        self.assertEqual(args.min_kick_foot_height_change, 20.0)
         self.assertEqual(args.max_kick_opponent_distance_body_heights, 0.75)
 
     def test_normalizes_opponent_distance_by_average_fighter_height(self) -> None:

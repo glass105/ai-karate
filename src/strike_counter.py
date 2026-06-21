@@ -21,8 +21,10 @@ class StrikeDebug:
     kick_extension_delta: float = 0.0
     punch_extension_ratio: float = 0.0
     kick_extension_ratio: float = 0.0
+    kick_foot_height_change: float = 0.0
     kick_opponent_distance_body_heights: float | None = None
     punch_commitment_frames: int = 0
+    kick_commitment_frames: int = 0
     punch_cooldown: int = 0
     kick_cooldown: int = 0
     punch_armed: bool = True
@@ -41,12 +43,14 @@ class StrikeDebug:
             "strike_kick_extension_delta": round(self.kick_extension_delta, 4),
             "strike_punch_extension_ratio": round(self.punch_extension_ratio, 4),
             "strike_kick_extension_ratio": round(self.kick_extension_ratio, 4),
+            "strike_kick_foot_height_change": round(self.kick_foot_height_change, 4),
             "strike_kick_opponent_distance_body_heights": (
                 round(self.kick_opponent_distance_body_heights, 4)
                 if self.kick_opponent_distance_body_heights is not None
                 else ""
             ),
             "strike_punch_commitment_frames": self.punch_commitment_frames,
+            "strike_kick_commitment_frames": self.kick_commitment_frames,
             "strike_punch_cooldown": self.punch_cooldown,
             "strike_kick_cooldown": self.kick_cooldown,
             "strike_punch_armed": self.punch_armed,
@@ -85,7 +89,8 @@ class StrikeCounter:
         min_kick_extension_ratio: float = 1.20,
         min_punch_commitment_frames: int = 5,
         min_punch_commitment_ratio: float = 0.0,
-        min_kick_foot_height_change: float = 0.0,
+        min_kick_commitment_frames: int = 2,
+        min_kick_foot_height_change: float = 20.0,
         max_kick_opponent_distance_body_heights: float = 0.0,
         min_strike_score: float = 1.0,
         strike_rearm_score: float = 0.60,
@@ -105,6 +110,7 @@ class StrikeCounter:
         self.min_punch_commitment_ratio = (
             min_punch_commitment_ratio if min_punch_commitment_ratio > 0 else min_punch_extension_ratio
         )
+        self.min_kick_commitment_frames = max(1, min_kick_commitment_frames)
         self.min_kick_foot_height_change = min_kick_foot_height_change
         self.max_kick_opponent_distance_body_heights = max(0.0, max_kick_opponent_distance_body_heights)
         self.min_strike_score = min_strike_score
@@ -123,6 +129,7 @@ class StrikeCounter:
             lambda: {"punch": True, "kick": True}
         )
         self.last_debug: dict[int, StrikeDebug] = defaultdict(StrikeDebug)
+        self.last_frame_index: dict[int, int] = {}
 
     def update(
         self,
@@ -130,11 +137,17 @@ class StrikeCounter:
         keypoints: Keypoints,
         count_enabled: bool = True,
         opponent_distance_body_heights: float | None = None,
+        frame_index: int | None = None,
     ) -> str:
         if track_id < 0 or len(keypoints) < 17:
             self.last_debug[track_id] = StrikeDebug(strike_rejection_reason="invalid_pose")
             return ""
 
+        if frame_index is not None:
+            previous_frame = self.last_frame_index.get(track_id)
+            if previous_frame is not None and frame_index != previous_frame + 1:
+                self.history[track_id].clear()
+            self.last_frame_index[track_id] = frame_index
         self.history[track_id].append(keypoints)
         self._tick_cooldowns(track_id)
         if len(self.history[track_id]) < self.history_frames:
@@ -159,8 +172,10 @@ class StrikeCounter:
             kick_extension_delta=kick.extension_delta,
             punch_extension_ratio=punch.extension_ratio,
             kick_extension_ratio=kick.extension_ratio,
+            kick_foot_height_change=kick.details.get("height_change", 0.0),
             kick_opponent_distance_body_heights=opponent_distance_body_heights,
             punch_commitment_frames=punch.commitment_frames,
+            kick_commitment_frames=kick.commitment_frames,
             punch_cooldown=self.cooldowns[track_id]["punch"],
             kick_cooldown=self.cooldowns[track_id]["kick"],
             punch_armed=self.armed[track_id]["punch"],
@@ -211,7 +226,9 @@ class StrikeCounter:
             return ""
 
         if action == "kick" and kick.score >= self.min_strike_score:
-            if (
+            if kick.commitment_frames < self.min_kick_commitment_frames:
+                debug.strike_rejection_reason = "kick_not_committed"
+            elif (
                 self.max_kick_opponent_distance_body_heights > 0
                 and opponent_distance_body_heights is None
             ):
@@ -304,6 +321,11 @@ class StrikeCounter:
                 self.min_kick_extension_delta,
                 self.min_kick_extension_ratio,
                 min_height_change=self.min_kick_foot_height_change,
+                old_motion_anchor=old[hip],
+                new_motion_anchor=new[hip],
+            )
+            hip_to_ankle.commitment_frames = self._kick_commitment_frames(
+                track_id, hip, hip, ankle, self.min_kick_endpoint_motion
             )
             knee_to_ankle = self._limb_motion(
                 old[knee],
@@ -314,6 +336,15 @@ class StrikeCounter:
                 self.min_kick_extension_delta,
                 self.min_kick_extension_ratio,
                 min_height_change=self.min_kick_foot_height_change,
+                old_motion_anchor=old[hip],
+                new_motion_anchor=new[hip],
+            )
+            knee_to_ankle.commitment_frames = self._kick_commitment_frames(
+                track_id,
+                knee,
+                hip,
+                ankle,
+                self.min_kick_foot_motion or self.min_kick_endpoint_motion,
             )
             candidates.extend((hip_to_ankle, knee_to_ankle))
             if self.min_kick_foot_motion > 0:
@@ -328,6 +359,42 @@ class StrikeCounter:
                     )
                 )
         return max(candidates, key=lambda motion: motion.score)
+
+    def _kick_commitment_frames(
+        self,
+        track_id: int,
+        extension_anchor: int,
+        motion_anchor: int,
+        ankle: int,
+        min_endpoint_motion: float,
+    ) -> int:
+        first = self.history[track_id][0]
+        old_extension = dist(self._xy(first[extension_anchor]), self._xy(first[ankle]))
+        old_relative = self._relative_xy(first[ankle], first[motion_anchor])
+        if old_extension <= 1e-6:
+            return 0
+
+        committed = 0
+        for keypoints in reversed(self.history[track_id]):
+            new_extension = dist(self._xy(keypoints[extension_anchor]), self._xy(keypoints[ankle]))
+            new_relative = self._relative_xy(keypoints[ankle], keypoints[motion_anchor])
+            endpoint_motion = dist(old_relative, new_relative)
+            extension_delta = new_extension - old_extension
+            extension_ratio = new_extension / old_extension
+            height_change = abs(new_relative[1] - old_relative[1])
+            if (
+                endpoint_motion >= min_endpoint_motion
+                and extension_delta >= self.min_kick_extension_delta
+                and extension_ratio >= self.min_kick_extension_ratio
+                and (
+                    self.min_kick_foot_height_change <= 0
+                    or height_change >= self.min_kick_foot_height_change
+                )
+            ):
+                committed += 1
+            else:
+                break
+        return committed
 
     def _foot_travel_motion(
         self,
@@ -345,7 +412,15 @@ class StrikeCounter:
         new_knee_xy = self._xy(new_knee)
         new_ankle_xy = self._xy(new_ankle)
 
-        endpoint_motion = dist(old_ankle_xy, new_ankle_xy)
+        old_relative_ankle = (
+            old_ankle_xy[0] - old_hip_xy[0],
+            old_ankle_xy[1] - old_hip_xy[1],
+        )
+        new_relative_ankle = (
+            new_ankle_xy[0] - new_hip_xy[0],
+            new_ankle_xy[1] - new_hip_xy[1],
+        )
+        endpoint_motion = dist(old_relative_ankle, new_relative_ankle)
         old_full_extension = dist(old_hip_xy, old_ankle_xy)
         new_full_extension = dist(new_hip_xy, new_ankle_xy)
         old_lower_extension = dist(old_knee_xy, old_ankle_xy)
@@ -359,7 +434,7 @@ class StrikeCounter:
                 new_lower_extension / old_lower_extension if old_lower_extension > 1e-6 else 0.0,
             )
         )
-        height_change = abs(new_ankle_xy[1] - old_ankle_xy[1])
+        height_change = abs(new_relative_ankle[1] - old_relative_ankle[1])
 
         motion_score = endpoint_motion / self.min_kick_foot_motion if self.min_kick_foot_motion else 0.0
         delta_score = extension_delta / self.min_kick_extension_delta if self.min_kick_extension_delta else 0.0
@@ -382,6 +457,12 @@ class StrikeCounter:
         return float(point[0]), float(point[1])
 
     @classmethod
+    def _relative_xy(cls, point: Point, anchor: Point) -> tuple[float, float]:
+        point_xy = cls._xy(point)
+        anchor_xy = cls._xy(anchor)
+        return point_xy[0] - anchor_xy[0], point_xy[1] - anchor_xy[1]
+
+    @classmethod
     def _limb_motion(
         cls,
         old_anchor: Point,
@@ -392,6 +473,8 @@ class StrikeCounter:
         min_extension_delta: float,
         min_extension_ratio: float,
         min_height_change: float = 0.0,
+        old_motion_anchor: Point | None = None,
+        new_motion_anchor: Point | None = None,
     ) -> LimbMotion:
         old_anchor_xy = cls._xy(old_anchor)
         old_endpoint_xy = cls._xy(old_endpoint)
@@ -399,10 +482,16 @@ class StrikeCounter:
         new_endpoint_xy = cls._xy(new_endpoint)
         old_extension = dist(old_anchor_xy, old_endpoint_xy)
         new_extension = dist(new_anchor_xy, new_endpoint_xy)
-        endpoint_motion = dist(old_endpoint_xy, new_endpoint_xy)
+        if old_motion_anchor is not None and new_motion_anchor is not None:
+            old_motion_endpoint = cls._relative_xy(old_endpoint, old_motion_anchor)
+            new_motion_endpoint = cls._relative_xy(new_endpoint, new_motion_anchor)
+        else:
+            old_motion_endpoint = old_endpoint_xy
+            new_motion_endpoint = new_endpoint_xy
+        endpoint_motion = dist(old_motion_endpoint, new_motion_endpoint)
         extension_delta = new_extension - old_extension
         extension_ratio = new_extension / old_extension if old_extension > 1e-6 else 0.0
-        height_change = abs(new_endpoint_xy[1] - old_endpoint_xy[1])
+        height_change = abs(new_motion_endpoint[1] - old_motion_endpoint[1])
         motion_score = endpoint_motion / min_endpoint_motion if min_endpoint_motion else 0.0
         delta_score = extension_delta / min_extension_delta if min_extension_delta else 0.0
         ratio_score = extension_ratio / min_extension_ratio if min_extension_ratio else 0.0
