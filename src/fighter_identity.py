@@ -244,6 +244,7 @@ class FighterIdentity:
         self._velocity = (0.0, 0.0)
         self._lineup_stable_frames = 0
         self._lineup_reset_applied = False
+        self._lineup_reanchor_pending = False
         self._previous_foreground: dict[int, TrackedBox] = {}
         self._foreground_max_height = 1.0
         self._last_scores: dict[int, IdentityScore] = {}
@@ -264,6 +265,8 @@ class FighterIdentity:
             self._set_grace_visual()
             self._clear_pending()
             self._update_lineup_state([])
+            if self._lineup_reanchor_pending:
+                self._clear_visual()
             self._last_scores = {}
             return None
         foreground = self._fighter_candidates(boxes)
@@ -289,6 +292,12 @@ class FighterIdentity:
             self._accept(lineup_reset)
             self._mark_visual(lineup_reset, tentative=False)
             return lineup_reset.track_id
+        if self._lineup_reanchor_pending:
+            self._missing_frames += 1
+            self._visible_track_id = None
+            self._clear_pending()
+            self._clear_visual()
+            return None
 
         current = next(
             (box for box in foreground if box.track_id == self.fighter_a_track_id),
@@ -889,17 +898,21 @@ class FighterIdentity:
         self._previous_foreground = {box.track_id: box for box in boxes}
         if not stable:
             self._lineup_stable_frames = 0
-            self._lineup_reset_applied = False
+            if not self._lineup_reanchor_pending:
+                self._lineup_reset_applied = False
             return None
         self._lineup_stable_frames += 1
-        if self._lineup_reset_applied or self._lineup_stable_frames < self.lineup_pause_frames:
+        if self._lineup_reset_applied:
             return None
+        if not self._lineup_reanchor_pending and self._lineup_stable_frames < self.lineup_pause_frames:
+            return None
+        self._lineup_reanchor_pending = True
+        side_candidate = ordered[0] if self.fighter_a_start == "left" else ordered[-1]
+        if not self._eligible_recovery_candidates([side_candidate]):
+            return None
+        self._lineup_reanchor_pending = False
         self._lineup_reset_applied = True
-        eligible = sorted(self._eligible_recovery_candidates(ordered), key=lambda box: box.center_x)
-        if not eligible:
-            return None
-        selected = eligible[0] if self.fighter_a_start == "left" else eligible[-1]
-        return selected if selected.track_id != self.fighter_a_track_id else None
+        return side_candidate if side_candidate.track_id != self.fighter_a_track_id else None
 
 
 def _mean_absolute_distance(

@@ -787,6 +787,48 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertEqual(identity.observe(lineup), 20)
         self.assertEqual(identity.reset_count, 0)
 
+    def test_lineup_reset_retries_hard_rejected_side_candidate(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_blue_gloves=True,
+            min_blue_glove_score=0.15,
+            glove_reject_hold_frames=1,
+            lineup_pause_frames=2,
+            lineup_separation_threshold=0.75,
+        )
+        identity.observe(
+            [
+                TrackedBox(10, 100, 0, 300, 400),
+                TrackedBox(20, 500, 0, 700, 400),
+            ]
+        )
+        vetoed_lineup = [
+            TrackedBox(20, 100, 0, 300, 400, blue_glove_score=0.20),
+            TrackedBox(10, 500, 0, 700, 400),
+        ]
+        identity.observe(vetoed_lineup)
+        identity.observe(vetoed_lineup)
+
+        blocked = identity.observe(vetoed_lineup)
+
+        self.assertIsNone(blocked)
+        self.assertEqual(identity.label(10), "fighter-10")
+        self.assertEqual(identity.label(20), "fighter-20")
+        self.assertEqual(identity.reset_count, 0)
+        self.assertEqual(identity.identity_scores[20].rejection_reason, "blue_glove")
+
+        eligible_lineup = [
+            TrackedBox(20, 100, 0, 300, 400),
+            TrackedBox(10, 500, 0, 700, 400),
+        ]
+        recovered = identity.observe(eligible_lineup)
+
+        self.assertEqual(recovered, 20)
+        self.assertEqual(identity.label(20), "Gabriel")
+        self.assertEqual(identity.label(10), "fighter-10")
+        self.assertEqual(identity.reset_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
