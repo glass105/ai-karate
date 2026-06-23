@@ -87,7 +87,7 @@ class StrikeCounter:
         min_kick_extension_delta: float = 12.0,
         min_punch_extension_ratio: float = 1.20,
         min_kick_extension_ratio: float = 1.20,
-        min_punch_commitment_frames: int = 5,
+        min_punch_commitment_frames: int = 3,
         min_punch_commitment_ratio: float = 0.0,
         min_kick_commitment_frames: int = 2,
         min_kick_foot_height_change: float = 20.0,
@@ -130,6 +130,7 @@ class StrikeCounter:
         )
         self.last_debug: dict[int, StrikeDebug] = defaultdict(StrikeDebug)
         self.last_frame_index: dict[int, int] = {}
+        self.pending_punch_commitment: dict[int, int] = {}
 
     def update(
         self,
@@ -147,6 +148,7 @@ class StrikeCounter:
             previous_frame = self.last_frame_index.get(track_id)
             if previous_frame is not None and frame_index != previous_frame + 1:
                 self.history[track_id].clear()
+                self.pending_punch_commitment.pop(track_id, None)
             self.last_frame_index[track_id] = frame_index
         self.history[track_id].append(keypoints)
         self._tick_cooldowns(track_id)
@@ -205,14 +207,13 @@ class StrikeCounter:
                 if self.cooldowns[track_id]["fake_punch"] > 0:
                     debug.strike_rejection_reason = "fake_punch_cooldown"
                 else:
-                    self.counts[track_id]["fake_punches"] += 1
-                    self.cooldowns[track_id]["fake_punch"] = self.punch_cooldown_frames
-                    debug.strike_candidate_type = "fake_punch"
-                    debug.strike_confirmed = True
-                    debug.strike_rejection_reason = "fake_punch"
-                    self.last_debug[track_id] = debug
-                    return "fake_punch"
+                    self.pending_punch_commitment[track_id] = max(
+                        punch.commitment_frames,
+                        self.pending_punch_commitment.get(track_id, 0),
+                    )
+                    debug.strike_rejection_reason = "punch_pending_commitment"
             else:
+                self.pending_punch_commitment.pop(track_id, None)
                 self.counts[track_id]["punches"] += 1
                 self.cooldowns[track_id]["punch"] = self.punch_cooldown_frames
                 self.armed[track_id]["punch"] = False
@@ -254,6 +255,25 @@ class StrikeCounter:
                 return "kick"
             self.last_debug[track_id] = debug
             return ""
+
+        if (
+            count_enabled
+            and track_id in self.pending_punch_commitment
+            and punch.score < self.strike_rearm_score
+        ):
+            pending_commitment = self.pending_punch_commitment.pop(track_id)
+            if self.cooldowns[track_id]["fake_punch"] <= 0:
+                self.counts[track_id]["fake_punches"] += 1
+                self.cooldowns[track_id]["fake_punch"] = self.punch_cooldown_frames
+                debug.punch_commitment_frames = max(
+                    debug.punch_commitment_frames,
+                    pending_commitment,
+                )
+                debug.strike_candidate_type = "fake_punch"
+                debug.strike_confirmed = True
+                debug.strike_rejection_reason = "fake_punch"
+                self.last_debug[track_id] = debug
+                return "fake_punch"
 
         if debug.strike_candidate_type:
             debug.strike_rejection_reason = f"{debug.strike_candidate_type}_cooldown"

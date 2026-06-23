@@ -21,9 +21,13 @@ class StrikeCounterTests(unittest.TestCase):
         second = pose()
         second[5] = [0, 0]
         second[9] = [60, 0]
+        third = pose()
+        third[5] = [0, 0]
+        third[9] = [20, 0]
 
         self.assertEqual(counter.update(1, first), "")
-        self.assertEqual(counter.update(1, second), "fake_punch")
+        self.assertEqual(counter.update(1, second), "")
+        self.assertEqual(counter.update(1, third), "fake_punch")
         self.assertEqual(counter.counts[1]["punches"], 0)
         self.assertEqual(counter.counts[1]["fake_punches"], 1)
 
@@ -40,9 +44,14 @@ class StrikeCounterTests(unittest.TestCase):
         second = pose()
         second[5] = [0, 0]
         second[9] = [60, 0]
+        third = pose()
+        third[5] = [0, 0]
+        third[9] = [20, 0]
 
         self.assertEqual(counter.update(1, first), "")
-        self.assertEqual(counter.update(1, second), "fake_punch")
+        self.assertEqual(counter.update(1, second), "")
+        self.assertEqual(counter.last_debug[1].strike_rejection_reason, "punch_pending_commitment")
+        self.assertEqual(counter.update(1, third), "fake_punch")
         self.assertEqual(counter.counts[1]["punches"], 0)
         self.assertEqual(counter.counts[1]["fake_punches"], 1)
         self.assertEqual(counter.last_debug[1].strike_rejection_reason, "fake_punch")

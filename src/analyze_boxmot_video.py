@@ -173,7 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-kick-extension-ratio", default=1.20, type=float)
     parser.add_argument(
         "--min-punch-commitment-frames",
-        default=5,
+        default=3,
         type=int,
         help="Consecutive ending frames the arm must stay extended before a punch is counted as real.",
     )
