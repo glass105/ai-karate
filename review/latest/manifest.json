@@ -1,0 +1,22 @@
+﻿{
+    "source_directory":  "videos/output/rtmw-yolo26l-hybridsort-arcface-none-reject-blue-red-punchcommit3-left-roi20y20-90sec",
+    "source_stem":  "Fight-2_03-21-26_SaintLeo",
+    "published_at_utc":  "2026-06-24T15:11:28.0279085Z",
+    "files":  [
+                  {
+                      "name":  "summary.json",
+                      "bytes":  5525,
+                      "sha256":  "76b172e300fd183fd62b5dba78e4c1675ec2ffb2eb235a1e1b814919076840fb"
+                  },
+                  {
+                      "name":  "tracks.csv",
+                      "bytes":  10206893,
+                      "sha256":  "9cb825ded5744dbaa6d719afd6aab7498ee97a34c3ae24c61286cea8ee5266c8"
+                  },
+                  {
+                      "name":  "process.log",
+                      "bytes":  2690040,
+                      "sha256":  "39c71b22d602cc561b0e7afa7fc6b44f28ecbdba0abf91697e8c0e3a3fb1290f"
+                  }
+              ]
+}
