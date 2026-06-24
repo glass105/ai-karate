@@ -22,7 +22,10 @@ class StrikeDebug:
     punch_extension_ratio: float = 0.0
     kick_extension_ratio: float = 0.0
     kick_foot_height_change: float = 0.0
+    kick_foot_elevation_body_heights: float = 0.0
+    kick_support_foot_motion_body_heights: float = 0.0
     kick_opponent_distance_body_heights: float | None = None
+    kick_used_recent_opponent: bool = False
     punch_commitment_frames: int = 0
     kick_commitment_frames: int = 0
     punch_cooldown: int = 0
@@ -44,11 +47,18 @@ class StrikeDebug:
             "strike_punch_extension_ratio": round(self.punch_extension_ratio, 4),
             "strike_kick_extension_ratio": round(self.kick_extension_ratio, 4),
             "strike_kick_foot_height_change": round(self.kick_foot_height_change, 4),
+            "strike_kick_foot_elevation_body_heights": round(
+                self.kick_foot_elevation_body_heights, 4
+            ),
+            "strike_kick_support_foot_motion_body_heights": round(
+                self.kick_support_foot_motion_body_heights, 4
+            ),
             "strike_kick_opponent_distance_body_heights": (
                 round(self.kick_opponent_distance_body_heights, 4)
                 if self.kick_opponent_distance_body_heights is not None
                 else ""
             ),
+            "strike_kick_used_recent_opponent": self.kick_used_recent_opponent,
             "strike_punch_commitment_frames": self.punch_commitment_frames,
             "strike_kick_commitment_frames": self.kick_commitment_frames,
             "strike_punch_cooldown": self.punch_cooldown,
@@ -91,7 +101,14 @@ class StrikeCounter:
         min_punch_commitment_ratio: float = 0.0,
         min_kick_commitment_frames: int = 2,
         min_kick_foot_height_change: float = 20.0,
+        min_kick_score: float = 0.0,
+        strong_kick_score: float = 0.0,
+        max_kick_extension_ratio: float = 0.0,
+        min_kick_foot_elevation_body_heights: float = 0.0,
+        strong_kick_foot_elevation_body_heights: float = 0.0,
+        max_kick_support_foot_motion_body_heights: float = 0.0,
         max_kick_opponent_distance_body_heights: float = 0.0,
+        kick_opponent_memory_frames: int = 0,
         min_strike_score: float = 1.0,
         strike_rearm_score: float = 0.60,
         min_strike_score_gap: float = 0.10,
@@ -112,7 +129,20 @@ class StrikeCounter:
         )
         self.min_kick_commitment_frames = max(1, min_kick_commitment_frames)
         self.min_kick_foot_height_change = min_kick_foot_height_change
+        self.min_kick_score = min_kick_score if min_kick_score > 0 else min_strike_score
+        self.strong_kick_score = max(0.0, strong_kick_score)
+        self.max_kick_extension_ratio = max(0.0, max_kick_extension_ratio)
+        self.min_kick_foot_elevation_body_heights = max(
+            0.0, min_kick_foot_elevation_body_heights
+        )
+        self.strong_kick_foot_elevation_body_heights = max(
+            0.0, strong_kick_foot_elevation_body_heights
+        )
+        self.max_kick_support_foot_motion_body_heights = max(
+            0.0, max_kick_support_foot_motion_body_heights
+        )
         self.max_kick_opponent_distance_body_heights = max(0.0, max_kick_opponent_distance_body_heights)
+        self.kick_opponent_memory_frames = max(0, kick_opponent_memory_frames)
         self.min_strike_score = min_strike_score
         self.strike_rearm_score = strike_rearm_score
         self.min_strike_score_gap = min_strike_score_gap
@@ -131,6 +161,7 @@ class StrikeCounter:
         self.last_debug: dict[int, StrikeDebug] = defaultdict(StrikeDebug)
         self.last_frame_index: dict[int, int] = {}
         self.pending_punch_commitment: dict[int, int] = {}
+        self.last_opponent_observation: dict[int, tuple[int, float]] = {}
 
     def update(
         self,
@@ -150,13 +181,30 @@ class StrikeCounter:
                 self.history[track_id].clear()
                 self.pending_punch_commitment.pop(track_id, None)
             self.last_frame_index[track_id] = frame_index
+        effective_opponent_distance = opponent_distance_body_heights
+        used_recent_opponent = False
+        if frame_index is not None and opponent_distance_body_heights is not None:
+            self.last_opponent_observation[track_id] = (
+                frame_index,
+                opponent_distance_body_heights,
+            )
+        elif frame_index is not None and self.kick_opponent_memory_frames > 0:
+            previous_opponent = self.last_opponent_observation.get(track_id)
+            if (
+                previous_opponent is not None
+                and frame_index - previous_opponent[0] <= self.kick_opponent_memory_frames
+            ):
+                effective_opponent_distance = previous_opponent[1]
+                used_recent_opponent = True
+
         self.history[track_id].append(keypoints)
         self._tick_cooldowns(track_id)
         if len(self.history[track_id]) < self.history_frames:
             self.last_debug[track_id] = StrikeDebug(
                 punch_cooldown=self.cooldowns[track_id]["punch"],
                 kick_cooldown=self.cooldowns[track_id]["kick"],
-                kick_opponent_distance_body_heights=opponent_distance_body_heights,
+                kick_opponent_distance_body_heights=effective_opponent_distance,
+                kick_used_recent_opponent=used_recent_opponent,
                 strike_rejection_reason="history_warmup",
             )
             return ""
@@ -175,7 +223,14 @@ class StrikeCounter:
             punch_extension_ratio=punch.extension_ratio,
             kick_extension_ratio=kick.extension_ratio,
             kick_foot_height_change=kick.details.get("height_change", 0.0),
-            kick_opponent_distance_body_heights=opponent_distance_body_heights,
+            kick_foot_elevation_body_heights=kick.details.get(
+                "foot_elevation_body_heights", 0.0
+            ),
+            kick_support_foot_motion_body_heights=kick.details.get(
+                "support_foot_motion_body_heights", 0.0
+            ),
+            kick_opponent_distance_body_heights=effective_opponent_distance,
+            kick_used_recent_opponent=used_recent_opponent,
             punch_commitment_frames=punch.commitment_frames,
             kick_commitment_frames=kick.commitment_frames,
             punch_cooldown=self.cooldowns[track_id]["punch"],
@@ -186,14 +241,19 @@ class StrikeCounter:
         action = "punch" if punch.score >= kick.score else "kick"
         action_score = max(punch.score, kick.score)
         other_score = kick.score if action == "punch" else punch.score
-        debug.strike_candidate_type = action if action_score >= self.min_strike_score else ""
+        action_qualified = (
+            punch.score >= self.min_strike_score
+            if action == "punch"
+            else self._kick_score_qualified(kick)
+        )
+        debug.strike_candidate_type = action if action_qualified else ""
 
         if not count_enabled and debug.strike_candidate_type:
             debug.strike_rejection_reason = "not_selected_fighter"
             self.last_debug[track_id] = debug
             return ""
 
-        if action_score >= self.min_strike_score and action_score - other_score < self.min_strike_score_gap:
+        if action_qualified and action_score - other_score < self.min_strike_score_gap:
             debug.strike_rejection_reason = "ambiguous_strike"
             self.last_debug[track_id] = debug
             return ""
@@ -226,17 +286,39 @@ class StrikeCounter:
             self.last_debug[track_id] = debug
             return ""
 
-        if action == "kick" and kick.score >= self.min_strike_score:
-            if kick.commitment_frames < self.min_kick_commitment_frames:
+        if action == "kick" and self._kick_score_qualified(kick):
+            strong_kinematics = self._strong_kick_kinematics(kick)
+            if (
+                self.max_kick_extension_ratio > 0
+                and kick.extension_ratio > self.max_kick_extension_ratio
+            ):
+                debug.strike_rejection_reason = "kick_pose_ratio_implausible"
+            elif (
+                self.min_kick_foot_elevation_body_heights > 0
+                and debug.kick_foot_elevation_body_heights
+                < self.min_kick_foot_elevation_body_heights
+            ):
+                debug.strike_rejection_reason = "kick_insufficient_foot_elevation"
+            elif (
+                self.max_kick_support_foot_motion_body_heights > 0
+                and debug.kick_support_foot_motion_body_heights
+                > self.max_kick_support_foot_motion_body_heights
+                and not strong_kinematics
+            ):
+                debug.strike_rejection_reason = "kick_support_foot_moving"
+            elif kick.commitment_frames < self.min_kick_commitment_frames:
                 debug.strike_rejection_reason = "kick_not_committed"
             elif (
                 self.max_kick_opponent_distance_body_heights > 0
-                and opponent_distance_body_heights is None
+                and effective_opponent_distance is None
+                and not strong_kinematics
             ):
                 debug.strike_rejection_reason = "kick_no_opponent"
             elif (
                 self.max_kick_opponent_distance_body_heights > 0
-                and opponent_distance_body_heights > self.max_kick_opponent_distance_body_heights
+                and effective_opponent_distance is not None
+                and effective_opponent_distance > self.max_kick_opponent_distance_body_heights
+                and not strong_kinematics
             ):
                 debug.strike_rejection_reason = "kick_opponent_too_far"
             elif self.cooldowns[track_id]["kick"] > 0:
@@ -331,7 +413,8 @@ class StrikeCounter:
     def _kick_motion(self, track_id: int) -> LimbMotion:
         old, new = self.history[track_id][0], self.history[track_id][-1]
         candidates: list[LimbMotion] = []
-        for hip, knee, ankle in ((11, 13, 15), (12, 14, 16)):
+        for hip, knee, ankle, support_ankle in ((11, 13, 15, 16), (12, 14, 16, 15)):
+            context = self._kick_context(track_id, hip, ankle, support_ankle)
             hip_to_ankle = self._limb_motion(
                 old[hip],
                 old[ankle],
@@ -347,6 +430,7 @@ class StrikeCounter:
             hip_to_ankle.commitment_frames = self._kick_commitment_frames(
                 track_id, hip, hip, ankle, self.min_kick_endpoint_motion
             )
+            hip_to_ankle.details.update(context)
             knee_to_ankle = self._limb_motion(
                 old[knee],
                 old[ankle],
@@ -366,19 +450,81 @@ class StrikeCounter:
                 ankle,
                 self.min_kick_foot_motion or self.min_kick_endpoint_motion,
             )
+            knee_to_ankle.details.update(context)
             candidates.extend((hip_to_ankle, knee_to_ankle))
             if self.min_kick_foot_motion > 0:
-                candidates.append(
-                    self._foot_travel_motion(
-                        old[hip],
-                        old[knee],
-                        old[ankle],
-                        new[hip],
-                        new[knee],
-                        new[ankle],
-                    )
+                foot_travel = self._foot_travel_motion(
+                    old[hip],
+                    old[knee],
+                    old[ankle],
+                    new[hip],
+                    new[knee],
+                    new[ankle],
                 )
+                foot_travel.details.update(context)
+                candidates.append(foot_travel)
         return max(candidates, key=lambda motion: motion.score)
+
+    def _kick_context(
+        self,
+        track_id: int,
+        hip: int,
+        ankle: int,
+        support_ankle: int,
+    ) -> dict[str, float]:
+        old = self.history[track_id][0]
+        new = self.history[track_id][-1]
+        body_height = self._pose_body_height(new)
+        foot_elevation = max(
+            0.0,
+            max(
+                float(keypoints[support_ankle][1]) - float(keypoints[ankle][1])
+                for keypoints in self.history[track_id]
+            ),
+        )
+        old_support = self._relative_xy(old[support_ankle], old[hip])
+        new_support = self._relative_xy(new[support_ankle], new[hip])
+        return {
+            "foot_elevation_body_heights": foot_elevation / body_height,
+            "support_foot_motion_body_heights": dist(old_support, new_support)
+            / body_height,
+        }
+
+    def _kick_score_qualified(self, kick: LimbMotion) -> bool:
+        if kick.score >= self.min_kick_score:
+            return True
+        elevation = kick.details.get("foot_elevation_body_heights", 0.0)
+        return (
+            kick.score >= self.min_strike_score
+            and self.strong_kick_foot_elevation_body_heights > 0
+            and elevation >= self.strong_kick_foot_elevation_body_heights
+        )
+
+    def _strong_kick_kinematics(self, kick: LimbMotion) -> bool:
+        elevation = kick.details.get("foot_elevation_body_heights", 0.0)
+        return (
+            (
+                kick.score >= self.min_kick_score
+                and self.strong_kick_foot_elevation_body_heights > 0
+                and elevation >= self.strong_kick_foot_elevation_body_heights
+            )
+            or (
+                self.strong_kick_score > 0
+                and self.min_kick_foot_elevation_body_heights > 0
+                and kick.score >= self.strong_kick_score
+                and elevation >= self.min_kick_foot_elevation_body_heights
+            )
+        )
+
+    @classmethod
+    def _pose_body_height(cls, keypoints: Keypoints) -> float:
+        y_values = [
+            cls._xy(keypoints[index])[1]
+            for index in (5, 6, 11, 12, 13, 14, 15, 16)
+            if index < len(keypoints)
+            and not (float(keypoints[index][0]) == 0 and float(keypoints[index][1]) == 0)
+        ]
+        return max(1.0, max(y_values) - min(y_values)) if y_values else 1.0
 
     def _kick_commitment_frames(
         self,

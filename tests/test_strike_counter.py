@@ -359,6 +359,107 @@ class StrikeCounterTests(unittest.TestCase):
         self.assertEqual(counter.update(1, spike), "")
         self.assertEqual(counter.last_debug[1].strike_rejection_reason, "kick_not_committed")
 
+    def test_rejects_kick_without_foot_elevation(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_kick_commitment_frames=1,
+            min_kick_foot_height_change=0.0,
+            min_kick_foot_elevation_body_heights=0.10,
+        )
+        first = pose()
+        first[11] = [0, 0]
+        first[15] = [20, 0]
+        first[16] = [20, 0]
+        second = pose()
+        second[11] = [0, 0]
+        second[15] = [60, 0]
+        second[16] = [20, 0]
+
+        counter.update(1, first)
+        self.assertEqual(counter.update(1, second), "")
+        self.assertEqual(
+            counter.last_debug[1].strike_rejection_reason,
+            "kick_insufficient_foot_elevation",
+        )
+
+    def test_rejects_implausible_kick_extension_ratio(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_kick_commitment_frames=1,
+            min_kick_foot_height_change=0.0,
+            max_kick_extension_ratio=4.0,
+        )
+        first = pose()
+        first[11] = [0, 0]
+        first[15] = [1, 0]
+        second = pose()
+        second[11] = [0, 0]
+        second[15] = [60, 0]
+
+        counter.update(1, first)
+        self.assertEqual(counter.update(1, second), "")
+        self.assertEqual(
+            counter.last_debug[1].strike_rejection_reason,
+            "kick_pose_ratio_implausible",
+        )
+
+    def test_rejects_step_when_support_foot_moves(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_kick_commitment_frames=1,
+            min_kick_foot_height_change=0.0,
+            min_kick_score=1.35,
+            min_kick_foot_elevation_body_heights=0.10,
+            max_kick_support_foot_motion_body_heights=0.08,
+        )
+        first = pose()
+        first[11] = [0, 0]
+        first[15] = [20, 40]
+        first[16] = [0, 100]
+        second = pose()
+        second[11] = [0, 0]
+        second[15] = [80, 20]
+        second[16] = [40, 100]
+
+        counter.update(1, first)
+        self.assertEqual(counter.update(1, second), "")
+        self.assertEqual(
+            counter.last_debug[1].strike_rejection_reason,
+            "kick_support_foot_moving",
+        )
+
+    def test_uses_recent_opponent_during_brief_occlusion(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_kick_commitment_frames=1,
+            min_kick_foot_height_change=0.0,
+            max_kick_opponent_distance_body_heights=0.70,
+            kick_opponent_memory_frames=2,
+        )
+        first = pose()
+        first[11] = [0, 0]
+        first[15] = [20, 0]
+        second = pose()
+        second[11] = [0, 0]
+        second[15] = [60, 0]
+
+        counter.update(
+            1,
+            first,
+            opponent_distance_body_heights=0.5,
+            frame_index=1,
+        )
+        self.assertEqual(counter.update(1, second, frame_index=2), "kick")
+        self.assertTrue(counter.last_debug[1].kick_used_recent_opponent)
+        self.assertEqual(
+            counter.last_debug[1].kick_opponent_distance_body_heights,
+            0.5,
+        )
+
     def test_requires_relative_foot_height_change(self) -> None:
         counter = StrikeCounter(
             fps=30,

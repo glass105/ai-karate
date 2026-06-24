@@ -191,13 +191,45 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--min-kick-foot-height-change", default=20.0, type=float)
     parser.add_argument(
+        "--min-kick-score",
+        default=1.35,
+        type=float,
+        help="Kick-specific score floor; high-elevation kicks can use --strike-min-score.",
+    )
+    parser.add_argument("--strong-kick-score", default=1.75, type=float)
+    parser.add_argument("--max-kick-extension-ratio", default=4.0, type=float)
+    parser.add_argument(
+        "--min-kick-foot-elevation-body-heights",
+        default=0.10,
+        type=float,
+        help="Minimum attacking-foot elevation over the support foot, normalized by pose height.",
+    )
+    parser.add_argument(
+        "--strong-kick-foot-elevation-body-heights",
+        default=0.28,
+        type=float,
+        help="Elevation that permits a strong kick to survive the general score/opponent fallback gates.",
+    )
+    parser.add_argument(
+        "--max-kick-support-foot-motion-body-heights",
+        default=0.08,
+        type=float,
+        help="Maximum support-foot travel relative to the hip during a kick window.",
+    )
+    parser.add_argument(
         "--max-kick-opponent-distance-body-heights",
-        default=0.75,
+        default=0.70,
         type=float,
         help=(
             "Maximum center distance to the other active fighter, normalized by the average fighter box height, "
             "for counting kicks; 0 disables the gate."
         ),
+    )
+    parser.add_argument(
+        "--kick-opponent-memory-frames",
+        default=12,
+        type=int,
+        help="Reuse the last opponent distance through brief detector/occlusion gaps.",
     )
     parser.add_argument("--strike-min-score", default=1.0, type=float)
     parser.add_argument("--strike-rearm-score", default=0.60, type=float)
@@ -620,7 +652,7 @@ def competition_fighter_score(
     center_x = (x1 + x2) / 2
     side_margin = min(center_x - roi_x1, roi_x2 - center_x) / roi_width
     standing = candidate.get("standing_score", 1.0)
-    if bottom_fraction >= 0.96 and standing < 0.75:
+    if bottom_fraction >= 0.995 and standing < 0.65:
         return 0.0
     if bottom_fraction >= 0.92 and side_margin <= 0.10 and standing < 0.80:
         return 0.0
@@ -738,7 +770,14 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         min_punch_commitment_ratio=args.min_punch_commitment_ratio,
         min_kick_commitment_frames=args.min_kick_commitment_frames,
         min_kick_foot_height_change=args.min_kick_foot_height_change,
+        min_kick_score=args.min_kick_score,
+        strong_kick_score=args.strong_kick_score,
+        max_kick_extension_ratio=args.max_kick_extension_ratio,
+        min_kick_foot_elevation_body_heights=args.min_kick_foot_elevation_body_heights,
+        strong_kick_foot_elevation_body_heights=args.strong_kick_foot_elevation_body_heights,
+        max_kick_support_foot_motion_body_heights=args.max_kick_support_foot_motion_body_heights,
         max_kick_opponent_distance_body_heights=args.max_kick_opponent_distance_body_heights,
+        kick_opponent_memory_frames=args.kick_opponent_memory_frames,
         min_strike_score=args.strike_min_score,
         strike_rearm_score=args.strike_rearm_score,
         min_strike_score_gap=args.min_strike_score_gap,
@@ -810,7 +849,9 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "strike_punch_score", "strike_kick_score", "strike_punch_endpoint_motion", "strike_kick_endpoint_motion",
         "strike_punch_extension_delta", "strike_kick_extension_delta", "strike_punch_extension_ratio",
         "strike_kick_extension_ratio", "strike_kick_foot_height_change",
+        "strike_kick_foot_elevation_body_heights", "strike_kick_support_foot_motion_body_heights",
         "strike_kick_opponent_distance_body_heights",
+        "strike_kick_used_recent_opponent",
         "strike_punch_commitment_frames", "strike_kick_commitment_frames",
         "strike_punch_cooldown", "strike_kick_cooldown",
         "strike_punch_armed", "strike_kick_armed", "strike_candidate_type", "strike_confirmed",
@@ -1151,7 +1192,14 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             ),
             "min_kick_commitment_frames": args.min_kick_commitment_frames,
             "min_kick_foot_height_change": args.min_kick_foot_height_change,
+            "min_kick_score": args.min_kick_score,
+            "strong_kick_score": args.strong_kick_score,
+            "max_kick_extension_ratio": args.max_kick_extension_ratio,
+            "min_kick_foot_elevation_body_heights": args.min_kick_foot_elevation_body_heights,
+            "strong_kick_foot_elevation_body_heights": args.strong_kick_foot_elevation_body_heights,
+            "max_kick_support_foot_motion_body_heights": args.max_kick_support_foot_motion_body_heights,
             "max_kick_opponent_distance_body_heights": args.max_kick_opponent_distance_body_heights,
+            "kick_opponent_memory_frames": args.kick_opponent_memory_frames,
             "strike_min_score": args.strike_min_score,
             "strike_rearm_score": args.strike_rearm_score,
             "min_strike_score_gap": args.min_strike_score_gap,

@@ -8,6 +8,7 @@ import numpy as np
 from src.analyze_boxmot_video import (
     attach_tracks,
     build_parser,
+    competition_fighter_score,
     detections_array,
     glove_color_settings,
     load_reference_descriptors,
@@ -218,7 +219,21 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.min_punch_commitment_frames, 3)
         self.assertEqual(args.min_kick_commitment_frames, 2)
         self.assertEqual(args.min_kick_foot_height_change, 20.0)
-        self.assertEqual(args.max_kick_opponent_distance_body_heights, 0.75)
+        self.assertEqual(args.min_kick_score, 1.35)
+        self.assertEqual(args.strong_kick_score, 1.75)
+        self.assertEqual(args.max_kick_extension_ratio, 4.0)
+        self.assertEqual(args.min_kick_foot_elevation_body_heights, 0.10)
+        self.assertEqual(args.strong_kick_foot_elevation_body_heights, 0.28)
+        self.assertEqual(args.max_kick_support_foot_motion_body_heights, 0.08)
+        self.assertEqual(args.max_kick_opponent_distance_body_heights, 0.70)
+        self.assertEqual(args.kick_opponent_memory_frames, 12)
+
+    def test_keeps_lunging_fighter_near_roi_bottom(self) -> None:
+        candidate = {"box": (490, 331, 602, 643), "standing_score": 0.7438}
+
+        score = competition_fighter_score(candidate, (256, 144, 1024, 648))
+
+        self.assertEqual(score, 1.0)
 
     def test_normalizes_opponent_distance_by_average_fighter_height(self) -> None:
         fighter = {"track_id": 7, "box": (0, 0, 100, 200), "competition_fighter_score": 1.0}
