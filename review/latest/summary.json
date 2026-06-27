@@ -4,7 +4,7 @@
   "model": "yolo26l-pose.pt",
   "rtm_detector_backend": "yolo",
   "tracker": "hybridsort",
-  "experiment_label": null,
+  "experiment_label": "rtmw-yolo26l-hybridsort-arcface-none-reject-blue-red-left-roi20y20-90sec-20260627",
   "fps": 30.0,
   "max_seconds": 90.0,
   "frames_processed": 2700,
@@ -27,7 +27,7 @@
     "reject_red_gloves": true,
     "reject_white_gloves": false,
     "reject_blue_gloves": true,
-    "require_standing": false,
+    "require_standing": true,
     "require_competition_fighter": true,
     "reference_images": [
       "reference/gabriel/Screenshot 2026-06-04 134123.jpg",
@@ -63,7 +63,7 @@
       "reference/exclude/Screenshot 2026-06-14 124249.jpg"
     ],
     "exclude_reference_image_count": 16,
-    "pose_reference_count": 24,
+    "pose_reference_count": 23,
     "face_reference_count": 5,
     "exclude_face_reference_count": 3,
     "require_reference_match": false,
@@ -77,20 +77,20 @@
     "glove_reject_hold_frames": 5,
     "min_standing_score": 0.45,
     "min_reference_match_score": 0.05,
-    "min_face_match_score": 0.45,
+    "min_face_match_score": 0.25,
     "strong_face_match_score": 0.75,
     "min_exclude_reference_match_score": 0.9,
     "min_exclude_body_match_score": 0.97,
     "min_exclude_face_match_score": 0.45,
-    "exclude_reference_hard_veto": true,
+    "exclude_reference_hard_veto": false,
     "exclude_veto_confirmation_frames": 4,
     "exclude_allow_strong_face_match": true,
-    "reset_to_start_side_after_missing_frames": 18,
-    "recovery_confirmation_frames": 8,
+    "reset_to_start_side_after_missing_frames": 10,
+    "recovery_confirmation_frames": 3,
     "fighter_candidate_limit": 4,
-    "lineup_pause_frames": 45,
-    "lineup_motion_threshold": 0.07,
-    "lineup_separation_threshold": 1.35,
+    "lineup_pause_frames": 30,
+    "lineup_motion_threshold": 0.1,
+    "lineup_separation_threshold": 1.2,
     "locked_fighter_exclude_grace_score": 0.98,
     "locked_fighter_min_continuity_score": 0.55,
     "locked_fighter_drop_confirmation_frames": 15,
@@ -103,50 +103,62 @@
     0.8,
     0.9
   ],
-  "gabriel_frames": 2071,
+  "gabriel_frames": 2099,
   "fighter_a_track_id": 3,
   "fighter_a_track_ids": [
     2,
     3,
-    49
+    48
   ],
   "identity_recoveries": 4,
-  "identity_resets": 3,
+  "identity_resets": 4,
   "counts_by_track_id": {
-    "3": {
-      "punches": 7,
+    "2": {
+      "punches": 2,
       "fake_punches": 0,
-      "kicks": 11
+      "kicks": 0
+    },
+    "3": {
+      "punches": 19,
+      "fake_punches": 11,
+      "kicks": 4
     }
   },
   "named_fighter_candidate_counts": {
-    "punches": 7,
-    "fake_punches": 0,
-    "kicks": 11
+    "punches": 21,
+    "fake_punches": 11,
+    "kicks": 4
   },
   "strike_counter": {
     "history_frames": 6,
-    "min_punch_endpoint_motion": 35.0,
-    "min_kick_endpoint_motion": 20.0,
+    "min_punch_endpoint_motion": 25.0,
+    "min_kick_endpoint_motion": 25.0,
     "min_kick_foot_motion": 0.0,
-    "min_punch_extension_delta": 18.0,
+    "min_punch_extension_delta": 12.0,
     "min_kick_extension_delta": 12.0,
-    "min_punch_extension_ratio": 1.35,
-    "min_kick_extension_ratio": 1.18,
+    "min_punch_extension_ratio": 1.2,
+    "min_kick_extension_ratio": 1.2,
     "min_punch_commitment_frames": 3,
-    "min_punch_commitment_ratio": 1.35,
+    "min_punch_commitment_ratio": 1.2,
     "min_kick_commitment_frames": 2,
     "min_kick_foot_height_change": 20.0,
-    "max_kick_opponent_distance_body_heights": 0.75,
-    "strike_min_score": 1.15,
+    "min_kick_score": 1.35,
+    "strong_kick_score": 1.75,
+    "max_kick_extension_ratio": 4.0,
+    "min_kick_foot_elevation_body_heights": 0.1,
+    "strong_kick_foot_elevation_body_heights": 0.28,
+    "max_kick_support_foot_motion_body_heights": 0.08,
+    "max_kick_opponent_distance_body_heights": 0.7,
+    "kick_opponent_memory_frames": 12,
+    "strike_min_score": 1.0,
     "strike_rearm_score": 0.6,
-    "min_strike_score_gap": 0.05,
-    "punch_cooldown_seconds": 0.6,
-    "kick_cooldown_seconds": 0.8,
+    "min_strike_score_gap": 0.1,
+    "punch_cooldown_seconds": 0.35,
+    "kick_cooldown_seconds": 0.5,
     "counts_only_selected_fighter": true
   },
   "artifacts": {
-    "annotated_video": "videos/output/rtmw-yolo26l-hybridsort-arcface-none-reject-blue-red-punchcommit3-left-roi20y20-90sec/Fight-2_03-21-26_SaintLeo_annotated.mp4",
-    "tracks_csv": "videos/output/rtmw-yolo26l-hybridsort-arcface-none-reject-blue-red-punchcommit3-left-roi20y20-90sec/Fight-2_03-21-26_SaintLeo_tracks.csv"
+    "annotated_video": "videos/output/rtmw-yolo26l-hybridsort-arcface-none-reject-blue-red-left-roi20y20-90sec-20260627/Fight-2_03-21-26_SaintLeo_annotated.mp4",
+    "tracks_csv": "videos/output/rtmw-yolo26l-hybridsort-arcface-none-reject-blue-red-left-roi20y20-90sec-20260627/Fight-2_03-21-26_SaintLeo_tracks.csv"
   }
 }
