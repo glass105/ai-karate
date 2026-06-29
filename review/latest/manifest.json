@@ -1,22 +1,22 @@
 ﻿{
-    "source_directory":  "videos/output/rtmw-yolo26l-hybridsort-arcface-none-reject-blue-red-left-roi20y20-90sec-20260627",
-    "source_stem":  "Fight-2_03-21-26_SaintLeo",
-    "published_at_utc":  "2026-06-27T19:06:36.0600091Z",
+    "published_at_utc":  "2026-06-29T16:03:24.0449504Z",
+    "source_directory":  "videos/output/rtmw-yolo26l-hybridsort-arcface-original-roi20y20-90sec",
+    "source_stem":  "Fight-1_03-21-26_SaintLeo",
     "files":  [
                   {
+                      "name":  "process.log",
+                      "bytes":  2251062,
+                      "sha256":  "0218593a461c785770329bba730ba16943b6174a34525abec0d1ed8286ada46e"
+                  },
+                  {
                       "name":  "summary.json",
-                      "bytes":  5963,
-                      "sha256":  "6ec7e3eeebe045b72e261889fefcedf8cba46adcd8b7b8683d9eb25e11b66ec8"
+                      "bytes":  6631,
+                      "sha256":  "2967b8c6b3c8b3cb2b83ca87b44d89c3427fa4616ff5841d23544268b9490406"
                   },
                   {
                       "name":  "tracks.csv",
-                      "bytes":  10407932,
-                      "sha256":  "5432c98a76ca9a88a83fdd4a3116d63d77c394e19c993478a13ae8602b7cf5c9"
-                  },
-                  {
-                      "name":  "process.log",
-                      "bytes":  2681888,
-                      "sha256":  "5bc5a9721e2c1cc4942c042edb6299fec04551a62aed59ad4064604625833c8b"
+                      "bytes":  8165343,
+                      "sha256":  "1e7bb9218da184bf009bf049e8db8ad3d13e6246691efafc62809f8088fcdb2e"
                   }
               ]
 }
