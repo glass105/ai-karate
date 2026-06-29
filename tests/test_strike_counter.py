@@ -81,6 +81,235 @@ class StrikeCounterTests(unittest.TestCase):
         self.assertEqual(counter.counts[1]["fake_punches"], 0)
         self.assertEqual(counter.last_debug[1].punch_commitment_frames, 2)
 
+    def test_rejects_punch_when_identity_lock_is_too_new(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_punch_commitment_frames=1,
+            punch_cooldown_seconds=0.0,
+        )
+        first = pose()
+        first[5] = [0, 0]
+        first[9] = [20, 0]
+        second = pose()
+        second[5] = [0, 0]
+        second[9] = [60, 0]
+
+        self.assertEqual(counter.update(1, first, lock_frames=1, min_count_lock_frames=5), "")
+        self.assertEqual(counter.update(1, second, lock_frames=2, min_count_lock_frames=5), "")
+        self.assertEqual(counter.last_debug[1].strike_rejection_reason, "punch_identity_lock_too_new")
+        self.assertEqual(counter.counts[1]["punches"], 0)
+
+    def test_rejects_punch_when_opponent_is_too_far(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_punch_commitment_frames=1,
+            max_punch_opponent_distance_body_heights=0.85,
+            punch_cooldown_seconds=0.0,
+        )
+        first = pose()
+        first[5] = [0, 0]
+        first[9] = [20, 0]
+        second = pose()
+        second[5] = [0, 0]
+        second[9] = [60, 0]
+
+        self.assertEqual(counter.update(1, first, opponent_distance_body_heights=1.2), "")
+        self.assertEqual(counter.update(1, second, opponent_distance_body_heights=1.2), "")
+        self.assertEqual(counter.last_debug[1].strike_rejection_reason, "punch_opponent_too_far")
+        self.assertEqual(counter.counts[1]["punches"], 0)
+
+    def test_rejects_implausible_punch_extension_ratio(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_punch_commitment_frames=1,
+            max_punch_extension_ratio=4.0,
+            punch_cooldown_seconds=0.0,
+        )
+        first = pose()
+        first[5] = [0, 0]
+        first[9] = [10, 0]
+        second = pose()
+        second[5] = [0, 0]
+        second[9] = [70, 0]
+
+        self.assertEqual(counter.update(1, first), "")
+        self.assertEqual(counter.update(1, second), "")
+        self.assertEqual(counter.last_debug[1].strike_rejection_reason, "punch_pose_ratio_implausible")
+        self.assertEqual(counter.counts[1]["punches"], 0)
+
+    def test_rejects_mid_strength_punch_moving_away_from_target(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_punch_score=1.2,
+            min_punch_commitment_frames=1,
+            punch_target_gate_score=1.5,
+            max_untargeted_punch_distance_body_heights=0.75,
+            punch_cooldown_seconds=0.0,
+        )
+        first = pose()
+        first[5] = [0, 0]
+        first[9] = [20, 0]
+        second = pose()
+        second[5] = [0, 0]
+        second[9] = [56, 0]
+
+        counter.update(
+            1,
+            first,
+            opponent_center=(100.0, 0.0),
+            opponent_height=100.0,
+        )
+        self.assertEqual(
+            counter.update(
+                1,
+                second,
+                opponent_center=(-100.0, 0.0),
+                opponent_height=100.0,
+            ),
+            "",
+        )
+        self.assertEqual(counter.last_debug[1].strike_rejection_reason, "punch_not_targeted")
+
+    def test_keeps_mid_strength_punch_approaching_target(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_punch_score=1.2,
+            min_punch_commitment_frames=1,
+            punch_target_gate_score=1.5,
+            max_untargeted_punch_distance_body_heights=0.75,
+            punch_cooldown_seconds=0.0,
+        )
+        first = pose()
+        first[5] = [0, 0]
+        first[9] = [20, 0]
+        second = pose()
+        second[5] = [0, 0]
+        second[9] = [60, 0]
+
+        counter.update(
+            1,
+            first,
+            opponent_center=(100.0, 0.0),
+            opponent_height=100.0,
+        )
+        self.assertEqual(
+            counter.update(
+                1,
+                second,
+                opponent_center=(100.0, 0.0),
+                opponent_height=100.0,
+            ),
+            "punch",
+        )
+        self.assertEqual(counter.last_debug[1].punch_target_alignment, 1.0)
+
+    def test_rejects_punch_like_motion_during_kick_when_hand_misses_target(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_punch_score=1.2,
+            min_punch_commitment_frames=1,
+            min_kick_commitment_frames=1,
+            min_kick_foot_height_change=0.0,
+            max_mixed_strike_punch_target_distance_body_heights=0.60,
+            min_strike_score_gap=0.0,
+            punch_cooldown_seconds=0.0,
+        )
+        first = pose()
+        first[5] = [0, 0]
+        first[9] = [20, 0]
+        first[11] = [0, 0]
+        first[15] = [20, 0]
+        second = pose()
+        second[5] = [0, 0]
+        second[9] = [80, 0]
+        second[11] = [0, 0]
+        second[15] = [55, 0]
+
+        counter.update(
+            1,
+            first,
+            opponent_center=(180.0, 0.0),
+            opponent_height=100.0,
+        )
+        self.assertEqual(
+            counter.update(
+                1,
+                second,
+                opponent_center=(180.0, 0.0),
+                opponent_height=100.0,
+            ),
+            "",
+        )
+        self.assertEqual(
+            counter.last_debug[1].strike_rejection_reason,
+            "punch_kick_setup_not_targeted",
+        )
+
+    def test_suppresses_punch_immediately_after_confirmed_kick(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_punch_commitment_frames=1,
+            min_kick_commitment_frames=1,
+            min_kick_foot_height_change=0.0,
+            post_kick_punch_suppression_frames=5,
+            punch_cooldown_seconds=0.0,
+        )
+        kick_first = pose()
+        kick_first[11] = [0, 0]
+        kick_first[15] = [20, 0]
+        kick_second = pose()
+        kick_second[11] = [0, 0]
+        kick_second[15] = [60, 0]
+        punch_first = pose()
+        punch_first[5] = [0, 0]
+        punch_first[9] = [20, 0]
+        punch_second = pose()
+        punch_second[5] = [0, 0]
+        punch_second[9] = [60, 0]
+
+        counter.update(1, kick_first)
+        self.assertEqual(counter.update(1, kick_second), "kick")
+        counter.update(1, punch_first)
+        self.assertEqual(counter.update(1, punch_second), "")
+        self.assertEqual(counter.last_debug[1].strike_rejection_reason, "punch_after_recent_kick")
+
+    def test_rejects_low_score_duplicate_punch_shortly_after_confirmed_punch(self) -> None:
+        counter = StrikeCounter(
+            fps=30,
+            history_frames=2,
+            min_punch_score=1.10,
+            min_punch_commitment_frames=1,
+            duplicate_punch_window_frames=12,
+            min_duplicate_punch_score=1.20,
+            punch_cooldown_seconds=0.0,
+        )
+        first = pose()
+        first[5] = [0, 0]
+        first[9] = [20, 0]
+        strong = pose()
+        strong[5] = [0, 0]
+        strong[9] = [60, 0]
+        reset = pose()
+        reset[5] = [0, 0]
+        reset[9] = [20, 0]
+        weak = pose()
+        weak[5] = [0, 0]
+        weak[9] = [49, 0]
+
+        counter.update(1, first, frame_index=1)
+        self.assertEqual(counter.update(1, strong, frame_index=2), "punch")
+        counter.update(1, reset, frame_index=3)
+        counter.update(1, reset, frame_index=12)
+        self.assertEqual(counter.update(1, weak, frame_index=13), "")
+        self.assertEqual(counter.last_debug[1].strike_rejection_reason, "punch_duplicate_low_score")
+
     def test_counts_extended_ankle_as_kick(self) -> None:
         counter = StrikeCounter(
             fps=30,

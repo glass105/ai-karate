@@ -13,6 +13,7 @@ from src.analyze_boxmot_video import (
     glove_color_settings,
     load_reference_descriptors,
     opponent_distance_body_heights,
+    opponent_target_context,
     patch_rtm_fp16_input,
     reference_match_score,
     rtm_candidates,
@@ -219,6 +220,19 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.min_punch_commitment_frames, 3)
         self.assertEqual(args.min_kick_commitment_frames, 2)
         self.assertEqual(args.min_kick_foot_height_change, 20.0)
+        self.assertEqual(args.min_punch_score, 1.10)
+        self.assertEqual(args.max_punch_extension_ratio, 4.0)
+        self.assertEqual(args.max_punch_opponent_distance_body_heights, 0.0)
+        self.assertEqual(args.punch_target_gate_score, 1.50)
+        self.assertEqual(args.max_untargeted_punch_distance_body_heights, 0.75)
+        self.assertEqual(args.max_mixed_strike_punch_target_distance_body_heights, 0.60)
+        self.assertEqual(args.max_new_lock_punch_target_distance_body_heights, 0.45)
+        self.assertEqual(args.post_kick_combo_window_frames, 25)
+        self.assertEqual(args.duplicate_punch_window_frames, 12)
+        self.assertEqual(args.min_duplicate_punch_score, 1.20)
+        self.assertEqual(args.min_punch_count_lock_frames, 30)
+        self.assertEqual(args.post_kick_punch_suppression_frames, 8)
+        self.assertEqual(args.min_strike_id_match_gap, 0.03)
         self.assertEqual(args.min_kick_score, 1.35)
         self.assertEqual(args.strong_kick_score, 1.75)
         self.assertEqual(args.max_kick_extension_ratio, 4.0)
@@ -227,6 +241,7 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.max_kick_support_foot_motion_body_heights, 0.08)
         self.assertEqual(args.max_kick_opponent_distance_body_heights, 0.70)
         self.assertEqual(args.kick_opponent_memory_frames, 12)
+        self.assertEqual(args.punch_cooldown_seconds, 0.35)
 
     def test_keeps_lunging_fighter_near_roi_bottom(self) -> None:
         candidate = {"box": (490, 331, 602, 643), "standing_score": 0.7438}
@@ -248,6 +263,18 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         opponent = {"track_id": 8, "box": (150, 0, 250, 200), "competition_fighter_score": 0.0}
 
         self.assertIsNone(opponent_distance_body_heights(fighter, [fighter, opponent]))
+
+    def test_returns_nearest_opponent_target_context(self) -> None:
+        fighter = {"track_id": 7, "box": (0, 0, 100, 200), "competition_fighter_score": 1.0}
+        opponent = {"track_id": 8, "box": (150, 0, 250, 200), "competition_fighter_score": 1.0}
+
+        context = opponent_target_context(fighter, [fighter, opponent])
+
+        self.assertIsNotNone(context)
+        distance, center, height = context
+        self.assertEqual(distance, 0.75)
+        self.assertEqual(center, (200.0, 100.0))
+        self.assertEqual(height, 200.0)
 
     def test_accepts_start_and_reset_side_parameter(self) -> None:
         parser = build_parser()

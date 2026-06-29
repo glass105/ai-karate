@@ -24,6 +24,10 @@ class StrikeDebug:
     kick_foot_height_change: float = 0.0
     kick_foot_elevation_body_heights: float = 0.0
     kick_support_foot_motion_body_heights: float = 0.0
+    punch_opponent_distance_body_heights: float | None = None
+    punch_target_approach_body_heights: float | None = None
+    punch_target_distance_body_heights: float | None = None
+    punch_target_alignment: float | None = None
     kick_opponent_distance_body_heights: float | None = None
     kick_used_recent_opponent: bool = False
     punch_commitment_frames: int = 0
@@ -52,6 +56,26 @@ class StrikeDebug:
             ),
             "strike_kick_support_foot_motion_body_heights": round(
                 self.kick_support_foot_motion_body_heights, 4
+            ),
+            "strike_punch_opponent_distance_body_heights": (
+                round(self.punch_opponent_distance_body_heights, 4)
+                if self.punch_opponent_distance_body_heights is not None
+                else ""
+            ),
+            "strike_punch_target_approach_body_heights": (
+                round(self.punch_target_approach_body_heights, 4)
+                if self.punch_target_approach_body_heights is not None
+                else ""
+            ),
+            "strike_punch_target_distance_body_heights": (
+                round(self.punch_target_distance_body_heights, 4)
+                if self.punch_target_distance_body_heights is not None
+                else ""
+            ),
+            "strike_punch_target_alignment": (
+                round(self.punch_target_alignment, 4)
+                if self.punch_target_alignment is not None
+                else ""
             ),
             "strike_kick_opponent_distance_body_heights": (
                 round(self.kick_opponent_distance_body_heights, 4)
@@ -101,6 +125,17 @@ class StrikeCounter:
         min_punch_commitment_ratio: float = 0.0,
         min_kick_commitment_frames: int = 2,
         min_kick_foot_height_change: float = 20.0,
+        min_punch_score: float = 0.0,
+        max_punch_extension_ratio: float = 0.0,
+        max_punch_opponent_distance_body_heights: float = 0.0,
+        punch_target_gate_score: float = 0.0,
+        max_untargeted_punch_distance_body_heights: float = 0.0,
+        max_mixed_strike_punch_target_distance_body_heights: float = 0.0,
+        max_new_lock_punch_target_distance_body_heights: float = 0.45,
+        post_kick_combo_window_frames: int = 25,
+        duplicate_punch_window_frames: int = 12,
+        min_duplicate_punch_score: float = 1.20,
+        post_kick_punch_suppression_frames: int = 0,
         min_kick_score: float = 0.0,
         strong_kick_score: float = 0.0,
         max_kick_extension_ratio: float = 0.0,
@@ -129,6 +164,25 @@ class StrikeCounter:
         )
         self.min_kick_commitment_frames = max(1, min_kick_commitment_frames)
         self.min_kick_foot_height_change = min_kick_foot_height_change
+        self.min_punch_score = min_punch_score if min_punch_score > 0 else min_strike_score
+        self.max_punch_extension_ratio = max(0.0, max_punch_extension_ratio)
+        self.max_punch_opponent_distance_body_heights = max(
+            0.0, max_punch_opponent_distance_body_heights
+        )
+        self.punch_target_gate_score = max(0.0, punch_target_gate_score)
+        self.max_untargeted_punch_distance_body_heights = max(
+            0.0, max_untargeted_punch_distance_body_heights
+        )
+        self.max_mixed_strike_punch_target_distance_body_heights = max(
+            0.0, max_mixed_strike_punch_target_distance_body_heights
+        )
+        self.max_new_lock_punch_target_distance_body_heights = max(
+            0.0, max_new_lock_punch_target_distance_body_heights
+        )
+        self.post_kick_combo_window_frames = max(0, post_kick_combo_window_frames)
+        self.duplicate_punch_window_frames = max(0, duplicate_punch_window_frames)
+        self.min_duplicate_punch_score = max(0.0, min_duplicate_punch_score)
+        self.post_kick_punch_suppression_frames = max(0, post_kick_punch_suppression_frames)
         self.min_kick_score = min_kick_score if min_kick_score > 0 else min_strike_score
         self.strong_kick_score = max(0.0, strong_kick_score)
         self.max_kick_extension_ratio = max(0.0, max_kick_extension_ratio)
@@ -162,6 +216,8 @@ class StrikeCounter:
         self.last_frame_index: dict[int, int] = {}
         self.pending_punch_commitment: dict[int, int] = {}
         self.last_opponent_observation: dict[int, tuple[int, float]] = {}
+        self.last_kick_frame: dict[int, int] = {}
+        self.last_punch_frame: dict[int, int] = {}
 
     def update(
         self,
@@ -169,7 +225,11 @@ class StrikeCounter:
         keypoints: Keypoints,
         count_enabled: bool = True,
         opponent_distance_body_heights: float | None = None,
+        opponent_center: tuple[float, float] | None = None,
+        opponent_height: float | None = None,
         frame_index: int | None = None,
+        lock_frames: int | None = None,
+        min_count_lock_frames: int = 0,
     ) -> str:
         if track_id < 0 or len(keypoints) < 17:
             self.last_debug[track_id] = StrikeDebug(strike_rejection_reason="invalid_pose")
@@ -209,7 +269,7 @@ class StrikeCounter:
             )
             return ""
 
-        punch = self._punch_motion(track_id)
+        punch = self._punch_motion(track_id, opponent_center, opponent_height)
         kick = self._kick_motion(track_id)
         self._rearm_if_retracted(track_id, "punch", punch.score)
         self._rearm_if_retracted(track_id, "kick", kick.score)
@@ -229,6 +289,10 @@ class StrikeCounter:
             kick_support_foot_motion_body_heights=kick.details.get(
                 "support_foot_motion_body_heights", 0.0
             ),
+            punch_opponent_distance_body_heights=opponent_distance_body_heights,
+            punch_target_approach_body_heights=punch.details.get("target_approach_body_heights"),
+            punch_target_distance_body_heights=punch.details.get("target_distance_body_heights"),
+            punch_target_alignment=punch.details.get("target_alignment"),
             kick_opponent_distance_body_heights=effective_opponent_distance,
             kick_used_recent_opponent=used_recent_opponent,
             punch_commitment_frames=punch.commitment_frames,
@@ -242,7 +306,7 @@ class StrikeCounter:
         action_score = max(punch.score, kick.score)
         other_score = kick.score if action == "punch" else punch.score
         action_qualified = (
-            punch.score >= self.min_strike_score
+            punch.score >= self.min_punch_score
             if action == "punch"
             else self._kick_score_qualified(kick)
         )
@@ -254,34 +318,36 @@ class StrikeCounter:
             return ""
 
         if action_qualified and action_score - other_score < self.min_strike_score_gap:
+            if (
+                punch.score >= self.min_punch_score
+                and self._punch_has_close_target(punch)
+                and self._confirm_punch(
+                    track_id,
+                    punch,
+                    kick,
+                    debug,
+                    opponent_distance_body_heights,
+                    lock_frames,
+                    min_count_lock_frames,
+                    frame_index,
+                )
+            ):
+                return "punch"
             debug.strike_rejection_reason = "ambiguous_strike"
             self.last_debug[track_id] = debug
             return ""
 
-        if action == "punch" and punch.score >= self.min_strike_score:
-            if self.cooldowns[track_id]["punch"] > 0:
-                debug.strike_rejection_reason = "punch_cooldown"
-            elif not self.armed[track_id]["punch"]:
-                debug.strike_rejection_reason = "punch_not_rearmed"
-            elif punch.commitment_frames < self.min_punch_commitment_frames:
-                if self.cooldowns[track_id]["fake_punch"] > 0:
-                    debug.strike_rejection_reason = "fake_punch_cooldown"
-                else:
-                    self.pending_punch_commitment[track_id] = max(
-                        punch.commitment_frames,
-                        self.pending_punch_commitment.get(track_id, 0),
-                    )
-                    debug.strike_rejection_reason = "punch_pending_commitment"
-            else:
-                self.pending_punch_commitment.pop(track_id, None)
-                self.counts[track_id]["punches"] += 1
-                self.cooldowns[track_id]["punch"] = self.punch_cooldown_frames
-                self.armed[track_id]["punch"] = False
-                debug.punch_cooldown = self.cooldowns[track_id]["punch"]
-                debug.punch_armed = False
-                debug.strike_candidate_type = "punch"
-                debug.strike_confirmed = True
-                self.last_debug[track_id] = debug
+        if action == "punch" and punch.score >= self.min_punch_score:
+            if self._confirm_punch(
+                track_id,
+                punch,
+                kick,
+                debug,
+                opponent_distance_body_heights,
+                lock_frames,
+                min_count_lock_frames,
+                frame_index,
+            ):
                 return "punch"
             self.last_debug[track_id] = debug
             return ""
@@ -333,8 +399,28 @@ class StrikeCounter:
                 debug.kick_armed = False
                 debug.strike_candidate_type = "kick"
                 debug.strike_confirmed = True
+                if frame_index is not None:
+                    self.last_kick_frame[track_id] = frame_index
                 self.last_debug[track_id] = debug
                 return "kick"
+            if (
+                punch.score >= self.min_punch_score
+                and not (
+                    kick.score >= self.strong_kick_score
+                    and kick.score > punch.score
+                )
+                and self._confirm_punch(
+                    track_id,
+                    punch,
+                    kick,
+                    debug,
+                    opponent_distance_body_heights,
+                    lock_frames,
+                    min_count_lock_frames,
+                    frame_index,
+                )
+            ):
+                return "punch"
             self.last_debug[track_id] = debug
             return ""
 
@@ -373,7 +459,12 @@ class StrikeCounter:
             current = self.cooldowns[track_id][strike_type]
             self.cooldowns[track_id][strike_type] = max(0, current - 1)
 
-    def _punch_motion(self, track_id: int) -> LimbMotion:
+    def _punch_motion(
+        self,
+        track_id: int,
+        opponent_center: tuple[float, float] | None = None,
+        opponent_height: float | None = None,
+    ) -> LimbMotion:
         old, new = self.history[track_id][0], self.history[track_id][-1]
         candidates: list[LimbMotion] = []
         for shoulder, wrist in ((5, 9), (6, 10)):
@@ -387,8 +478,170 @@ class StrikeCounter:
                 self.min_punch_extension_ratio,
             )
             motion.commitment_frames = self._punch_commitment_frames(track_id, shoulder, wrist)
+            if opponent_center is not None and opponent_height is not None and opponent_height > 0:
+                motion.details.update(
+                    self._punch_target_context(old[wrist], new[wrist], opponent_center, opponent_height)
+                )
             candidates.append(motion)
         return max(candidates, key=lambda motion: motion.score)
+
+    def _punch_lacks_target_progress(
+        self,
+        punch: LimbMotion,
+        allow_post_kick_combo_drift: bool = False,
+    ) -> bool:
+        if (
+            self.punch_target_gate_score <= 0
+            or self.max_untargeted_punch_distance_body_heights <= 0
+            or punch.score >= self.punch_target_gate_score
+        ):
+            return False
+        approach = punch.details.get("target_approach_body_heights")
+        target_distance = punch.details.get("target_distance_body_heights")
+        if approach is None or target_distance is None:
+            return False
+        if allow_post_kick_combo_drift and target_distance <= 1.0:
+            return False
+        return approach < 0.10 and target_distance > self.max_untargeted_punch_distance_body_heights
+
+    def _mixed_strike_lacks_punch_target(self, punch: LimbMotion, kick: LimbMotion) -> bool:
+        if self.max_mixed_strike_punch_target_distance_body_heights <= 0:
+            return False
+        if kick.score < 0.90:
+            return False
+        target_distance = punch.details.get("target_distance_body_heights")
+        if target_distance is None:
+            return False
+        return target_distance > self.max_mixed_strike_punch_target_distance_body_heights
+
+    def _punch_has_close_target(self, punch: LimbMotion) -> bool:
+        target_distance = punch.details.get("target_distance_body_heights")
+        return (
+            target_distance is not None
+            and self.max_new_lock_punch_target_distance_body_heights > 0
+            and target_distance <= self.max_new_lock_punch_target_distance_body_heights
+        )
+
+    def _punch_has_lock_bypass_target(self, punch: LimbMotion) -> bool:
+        if self._punch_has_close_target(punch):
+            return True
+        approach = punch.details.get("target_approach_body_heights")
+        alignment = punch.details.get("target_alignment")
+        return (
+            approach is not None
+            and alignment is not None
+            and approach >= 0.15
+            and alignment >= 0.50
+        )
+
+    def _confirm_punch(
+        self,
+        track_id: int,
+        punch: LimbMotion,
+        kick: LimbMotion,
+        debug: StrikeDebug,
+        opponent_distance_body_heights: float | None,
+        lock_frames: int | None,
+        min_count_lock_frames: int,
+        frame_index: int | None,
+    ) -> bool:
+        allow_post_kick_combo_drift = self._in_post_kick_combo_window(track_id, frame_index)
+        if self.cooldowns[track_id]["punch"] > 0:
+            debug.strike_rejection_reason = "punch_cooldown"
+        elif not self.armed[track_id]["punch"]:
+            debug.strike_rejection_reason = "punch_not_rearmed"
+        elif (
+            self._is_low_score_duplicate_punch(
+                track_id,
+                frame_index,
+                punch,
+                allow_post_kick_combo_drift,
+            )
+        ):
+            debug.strike_rejection_reason = "punch_duplicate_low_score"
+        elif (
+            min_count_lock_frames > 0
+            and lock_frames is not None
+            and lock_frames < min_count_lock_frames
+            and lock_frames < 10
+            and not self._punch_has_lock_bypass_target(punch)
+        ):
+            debug.strike_rejection_reason = "punch_identity_lock_too_new"
+        elif (
+            self.max_punch_extension_ratio > 0
+            and punch.extension_ratio > self.max_punch_extension_ratio
+        ):
+            debug.strike_rejection_reason = "punch_pose_ratio_implausible"
+        elif (
+            self.max_punch_opponent_distance_body_heights > 0
+            and opponent_distance_body_heights is None
+        ):
+            debug.strike_rejection_reason = "punch_no_opponent"
+        elif (
+            self.max_punch_opponent_distance_body_heights > 0
+            and opponent_distance_body_heights is not None
+            and opponent_distance_body_heights > self.max_punch_opponent_distance_body_heights
+        ):
+            debug.strike_rejection_reason = "punch_opponent_too_far"
+        elif self._punch_lacks_target_progress(punch, allow_post_kick_combo_drift):
+            debug.strike_rejection_reason = "punch_not_targeted"
+        elif self._mixed_strike_lacks_punch_target(punch, kick):
+            debug.strike_rejection_reason = "punch_kick_setup_not_targeted"
+        elif (
+            self.post_kick_punch_suppression_frames > 0
+            and self.cooldowns[track_id]["kick"] > 0
+            and self.cooldowns[track_id]["kick"]
+            >= self.kick_cooldown_frames - self.post_kick_punch_suppression_frames
+        ):
+            debug.strike_rejection_reason = "punch_after_recent_kick"
+        elif punch.commitment_frames < self.min_punch_commitment_frames:
+            if self.cooldowns[track_id]["fake_punch"] > 0:
+                debug.strike_rejection_reason = "fake_punch_cooldown"
+            else:
+                self.pending_punch_commitment[track_id] = max(
+                    punch.commitment_frames,
+                    self.pending_punch_commitment.get(track_id, 0),
+                )
+                debug.strike_rejection_reason = "punch_pending_commitment"
+        else:
+            self.pending_punch_commitment.pop(track_id, None)
+            self.counts[track_id]["punches"] += 1
+            self.cooldowns[track_id]["punch"] = self.punch_cooldown_frames
+            self.armed[track_id]["punch"] = False
+            if frame_index is not None:
+                self.last_punch_frame[track_id] = frame_index
+            debug.punch_cooldown = self.cooldowns[track_id]["punch"]
+            debug.punch_armed = False
+            debug.strike_candidate_type = "punch"
+            debug.strike_confirmed = True
+            debug.strike_rejection_reason = ""
+            self.last_debug[track_id] = debug
+            return True
+        return False
+
+    def _in_post_kick_combo_window(self, track_id: int, frame_index: int | None) -> bool:
+        if frame_index is None or self.post_kick_combo_window_frames <= 0:
+            return False
+        last_kick = self.last_kick_frame.get(track_id)
+        return last_kick is not None and 0 < frame_index - last_kick <= self.post_kick_combo_window_frames
+
+    def _is_low_score_duplicate_punch(
+        self,
+        track_id: int,
+        frame_index: int | None,
+        punch: LimbMotion,
+        allow_post_kick_combo_drift: bool,
+    ) -> bool:
+        if (
+            frame_index is None
+            or self.duplicate_punch_window_frames <= 0
+            or self.min_duplicate_punch_score <= 0
+            or allow_post_kick_combo_drift
+            or punch.score >= self.min_duplicate_punch_score
+        ):
+            return False
+        last_punch = self.last_punch_frame.get(track_id)
+        return last_punch is not None and 0 < frame_index - last_punch <= self.duplicate_punch_window_frames
 
     def _punch_commitment_frames(self, track_id: int, shoulder: int, wrist: int) -> int:
         first = self.history[track_id][0]
@@ -464,6 +717,37 @@ class StrikeCounter:
                 foot_travel.details.update(context)
                 candidates.append(foot_travel)
         return max(candidates, key=lambda motion: motion.score)
+
+    @classmethod
+    def _punch_target_context(
+        cls,
+        old_wrist: Point,
+        new_wrist: Point,
+        opponent_center: tuple[float, float],
+        opponent_height: float,
+    ) -> dict[str, float]:
+        old_wrist_xy = cls._xy(old_wrist)
+        new_wrist_xy = cls._xy(new_wrist)
+        old_distance = dist(old_wrist_xy, opponent_center)
+        new_distance = dist(new_wrist_xy, opponent_center)
+        motion = (
+            new_wrist_xy[0] - old_wrist_xy[0],
+            new_wrist_xy[1] - old_wrist_xy[1],
+        )
+        to_target = (
+            opponent_center[0] - old_wrist_xy[0],
+            opponent_center[1] - old_wrist_xy[1],
+        )
+        motion_length = max(1e-6, dist((0.0, 0.0), motion))
+        target_length = max(1e-6, dist((0.0, 0.0), to_target))
+        alignment = (
+            motion[0] * to_target[0] + motion[1] * to_target[1]
+        ) / (motion_length * target_length)
+        return {
+            "target_approach_body_heights": (old_distance - new_distance) / opponent_height,
+            "target_distance_body_heights": new_distance / opponent_height,
+            "target_alignment": alignment,
+        }
 
     def _kick_context(
         self,

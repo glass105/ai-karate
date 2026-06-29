@@ -191,6 +191,96 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--min-kick-foot-height-change", default=20.0, type=float)
     parser.add_argument(
+        "--min-punch-score",
+        default=1.10,
+        type=float,
+        help="Punch-specific score floor; separates real punches from small arm/guard movements.",
+    )
+    parser.add_argument(
+        "--max-punch-extension-ratio",
+        default=4.0,
+        type=float,
+        help="Reject punch candidates with implausibly large arm extension ratios from pose glitches; 0 disables.",
+    )
+    parser.add_argument(
+        "--max-punch-opponent-distance-body-heights",
+        default=0.0,
+        type=float,
+        help=(
+            "Maximum center distance to the other active fighter, normalized by average fighter box height, "
+            "for counting punches; 0 disables the gate."
+        ),
+    )
+    parser.add_argument(
+        "--punch-target-gate-score",
+        default=1.50,
+        type=float,
+        help="Only apply the untargeted-punch gate below this punch score; 0 disables.",
+    )
+    parser.add_argument(
+        "--max-untargeted-punch-distance-body-heights",
+        default=0.75,
+        type=float,
+        help=(
+            "For mid-strength punches, reject if the hand moves away from the opponent and ends farther "
+            "than this normalized distance; 0 disables."
+        ),
+    )
+    parser.add_argument(
+        "--max-mixed-strike-punch-target-distance-body-heights",
+        default=0.60,
+        type=float,
+        help=(
+            "When punch and kick signals are both active, require the punch hand to finish this close to "
+            "the opponent target; 0 disables."
+        ),
+    )
+    parser.add_argument(
+        "--max-new-lock-punch-target-distance-body-heights",
+        default=0.45,
+        type=float,
+        help=(
+            "Allow a fresh Gabriel lock to count a punch when the hand finishes this close to the opponent; "
+            "0 disables the close-target lock bypass."
+        ),
+    )
+    parser.add_argument(
+        "--post-kick-combo-window-frames",
+        default=25,
+        type=int,
+        help="Allow target-geometry drift for punch counting within this many frames after a confirmed kick.",
+    )
+    parser.add_argument(
+        "--duplicate-punch-window-frames",
+        default=12,
+        type=int,
+        help="Reject low-score duplicate punches this many frames after a confirmed punch; 0 disables.",
+    )
+    parser.add_argument(
+        "--min-duplicate-punch-score",
+        default=1.20,
+        type=float,
+        help="Punch score needed to survive the duplicate-punch window.",
+    )
+    parser.add_argument(
+        "--min-punch-count-lock-frames",
+        default=30,
+        type=int,
+        help="Require Gabriel identity to be confirmed this many frames before counting punches.",
+    )
+    parser.add_argument(
+        "--post-kick-punch-suppression-frames",
+        default=8,
+        type=int,
+        help="Suppress punch counts for this many frames after a confirmed kick on the same track.",
+    )
+    parser.add_argument(
+        "--min-strike-id-match-gap",
+        default=0.03,
+        type=float,
+        help="Do not count Gabriel strikes when the selected identity score is too close to another candidate.",
+    )
+    parser.add_argument(
         "--min-kick-score",
         default=1.35,
         type=float,
@@ -682,6 +772,29 @@ def opponent_distance_body_heights(
     return min(distances) if distances else None
 
 
+def opponent_target_context(
+    fighter: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> tuple[float, tuple[float, float], float] | None:
+    """Return nearest active opponent distance, center, and height for strike targeting."""
+    x1, y1, x2, y2 = fighter["box"]
+    fighter_height = max(1.0, float(y2 - y1))
+    fighter_center = ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
+    targets = []
+    for candidate in candidates:
+        if candidate["track_id"] == fighter["track_id"]:
+            continue
+        if candidate.get("competition_fighter_score", 0.0) < 1.0:
+            continue
+        other_x1, other_y1, other_x2, other_y2 = candidate["box"]
+        other_height = max(1.0, float(other_y2 - other_y1))
+        other_center = ((other_x1 + other_x2) / 2.0, (other_y1 + other_y2) / 2.0)
+        center_distance = math.dist(fighter_center, other_center)
+        average_height = (fighter_height + other_height) / 2.0
+        targets.append((center_distance / average_height, other_center, other_height))
+    return min(targets, key=lambda item: item[0]) if targets else None
+
+
 def analyze(args: argparse.Namespace) -> dict[str, Any]:
     if not args.input.exists():
         raise SystemExit(f"Input video not found: {args.input}")
@@ -770,6 +883,17 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         min_punch_commitment_ratio=args.min_punch_commitment_ratio,
         min_kick_commitment_frames=args.min_kick_commitment_frames,
         min_kick_foot_height_change=args.min_kick_foot_height_change,
+        min_punch_score=args.min_punch_score,
+        max_punch_extension_ratio=args.max_punch_extension_ratio,
+        max_punch_opponent_distance_body_heights=args.max_punch_opponent_distance_body_heights,
+        punch_target_gate_score=args.punch_target_gate_score,
+        max_untargeted_punch_distance_body_heights=args.max_untargeted_punch_distance_body_heights,
+        max_mixed_strike_punch_target_distance_body_heights=args.max_mixed_strike_punch_target_distance_body_heights,
+        max_new_lock_punch_target_distance_body_heights=args.max_new_lock_punch_target_distance_body_heights,
+        post_kick_combo_window_frames=args.post_kick_combo_window_frames,
+        duplicate_punch_window_frames=args.duplicate_punch_window_frames,
+        min_duplicate_punch_score=args.min_duplicate_punch_score,
+        post_kick_punch_suppression_frames=args.post_kick_punch_suppression_frames,
         min_kick_score=args.min_kick_score,
         strong_kick_score=args.strong_kick_score,
         max_kick_extension_ratio=args.max_kick_extension_ratio,
@@ -850,6 +974,10 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "strike_punch_extension_delta", "strike_kick_extension_delta", "strike_punch_extension_ratio",
         "strike_kick_extension_ratio", "strike_kick_foot_height_change",
         "strike_kick_foot_elevation_body_heights", "strike_kick_support_foot_motion_body_heights",
+        "strike_punch_opponent_distance_body_heights",
+        "strike_punch_target_approach_body_heights",
+        "strike_punch_target_distance_body_heights",
+        "strike_punch_target_alignment",
         "strike_kick_opponent_distance_body_heights",
         "strike_kick_used_recent_opponent",
         "strike_punch_commitment_frames", "strike_kick_commitment_frames",
@@ -1018,23 +1146,33 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             for candidate in tracked:
                 track_id = candidate["track_id"]
                 label = identity.label(track_id)
-                kick_opponent_distance = (
-                    opponent_distance_body_heights(candidate, tracked)
-                    if label == args.fighter_a_name
-                    else None
-                )
-                action = counter.update(
-                    track_id,
-                    candidate["keypoints"],
-                    count_enabled=label == args.fighter_a_name,
-                    opponent_distance_body_heights=kick_opponent_distance,
-                    frame_index=frame_count,
-                )
-                strike_debug = counter.last_debug[track_id]
                 score = identity_scores.get(track_id)
                 visual_state = ""
                 if score is not None:
                     visual_state = "confirmed" if score.confirmed else "tentative" if score.tentative else "candidate"
+                strike_count_enabled = label == args.fighter_a_name and (
+                    score is None or score.match_gap >= args.min_strike_id_match_gap
+                )
+                opponent_context = (
+                    opponent_target_context(candidate, tracked)
+                    if strike_count_enabled
+                    else None
+                )
+                kick_opponent_distance = opponent_context[0] if opponent_context else None
+                opponent_center = opponent_context[1] if opponent_context else None
+                opponent_height = opponent_context[2] if opponent_context else None
+                action = counter.update(
+                    track_id,
+                    candidate["keypoints"],
+                    count_enabled=strike_count_enabled,
+                    opponent_distance_body_heights=kick_opponent_distance,
+                    opponent_center=opponent_center,
+                    opponent_height=opponent_height,
+                    frame_index=frame_count,
+                    lock_frames=identity.lock_frames if label == args.fighter_a_name else None,
+                    min_count_lock_frames=args.min_punch_count_lock_frames,
+                )
+                strike_debug = counter.last_debug[track_id]
                 if label == args.fighter_a_name and action:
                     action_key = {"punch": "punches", "fake_punch": "fake_punches", "kick": "kicks"}.get(action)
                     if action_key:
@@ -1192,6 +1330,19 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             ),
             "min_kick_commitment_frames": args.min_kick_commitment_frames,
             "min_kick_foot_height_change": args.min_kick_foot_height_change,
+            "min_punch_score": args.min_punch_score,
+            "max_punch_extension_ratio": args.max_punch_extension_ratio,
+            "max_punch_opponent_distance_body_heights": args.max_punch_opponent_distance_body_heights,
+            "punch_target_gate_score": args.punch_target_gate_score,
+            "max_untargeted_punch_distance_body_heights": args.max_untargeted_punch_distance_body_heights,
+            "max_mixed_strike_punch_target_distance_body_heights": args.max_mixed_strike_punch_target_distance_body_heights,
+            "max_new_lock_punch_target_distance_body_heights": args.max_new_lock_punch_target_distance_body_heights,
+            "post_kick_combo_window_frames": args.post_kick_combo_window_frames,
+            "duplicate_punch_window_frames": args.duplicate_punch_window_frames,
+            "min_duplicate_punch_score": args.min_duplicate_punch_score,
+            "min_punch_count_lock_frames": args.min_punch_count_lock_frames,
+            "post_kick_punch_suppression_frames": args.post_kick_punch_suppression_frames,
+            "min_strike_id_match_gap": args.min_strike_id_match_gap,
             "min_kick_score": args.min_kick_score,
             "strong_kick_score": args.strong_kick_score,
             "max_kick_extension_ratio": args.max_kick_extension_ratio,

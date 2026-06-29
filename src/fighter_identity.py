@@ -400,6 +400,10 @@ class FighterIdentity:
         return self._visual_tentative
 
     @property
+    def lock_frames(self) -> int:
+        return self._lock_frames
+
+    @property
     def identity_scores(self) -> dict[int, IdentityScore]:
         return self._last_scores
 
