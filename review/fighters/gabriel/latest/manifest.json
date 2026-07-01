@@ -1,0 +1,31 @@
+{
+  "fighter": "Gabriel",
+  "run": "rtmw-yolo26l-hybridsort-arcface-roi20y20-90sec-per60",
+  "source_output": "videos/output/gabriel/rtmw-yolo26l-hybridsort-arcface-roi20y20-90sec-per60",
+  "uploaded_to_github": [
+    "summary.json",
+    "manifest.json"
+  ],
+  "omitted_from_github": [
+    "tracks.csv",
+    "process.log",
+    "Fight-1_03-21-26_SaintLeo_annotated.mp4"
+  ],
+  "created_at": "2026-06-30T17:45:37.5671726-04:00",
+  "parameters": {
+    "fighter_a_name": "Gabriel",
+    "fighter_reference_root": "reference",
+    "fighter_a_start": "left",
+    "fighter_a_glove_color": "none",
+    "fighter_a_reject_blue_gloves": true,
+    "fighter_a_reject_red_gloves": true,
+    "roi": "0.2,0.2,0.8,0.9",
+    "max_seconds": 90,
+    "pose_backend": "rtmw",
+    "detector": "yolo26l-pose.pt",
+    "tracker": "hybridsort",
+    "face_backend": "deepface-arcface"
+  },
+  "canonical_branch": "codex/runpod-cuda-bootstrap",
+  "note": "Small review metadata only. Large/generated artifacts should stay on RunPod or external artifact storage."
+}

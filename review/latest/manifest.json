@@ -1,0 +1,22 @@
+﻿{
+    "published_at_utc":  "2026-06-29T16:03:24.0449504Z",
+    "source_directory":  "videos/output/rtmw-yolo26l-hybridsort-arcface-original-roi20y20-90sec",
+    "source_stem":  "Fight-1_03-21-26_SaintLeo",
+    "files":  [
+                  {
+                      "name":  "process.log",
+                      "bytes":  2251062,
+                      "sha256":  "0218593a461c785770329bba730ba16943b6174a34525abec0d1ed8286ada46e"
+                  },
+                  {
+                      "name":  "summary.json",
+                      "bytes":  6631,
+                      "sha256":  "2967b8c6b3c8b3cb2b83ca87b44d89c3427fa4616ff5841d23544268b9490406"
+                  },
+                  {
+                      "name":  "tracks.csv",
+                      "bytes":  8165343,
+                      "sha256":  "1e7bb9218da184bf009bf049e8db8ad3d13e6246691efafc62809f8088fcdb2e"
+                  }
+              ]
+}

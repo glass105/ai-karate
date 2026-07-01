@@ -16,6 +16,10 @@ export RUNPOD_GPU_ID="NVIDIA GeForce RTX 4090"
 export RUNPOD_NETWORK_VOLUME_ID=YOUR_VOLUME_ID
 ```
 
+Keep `RUNPOD_NETWORK_VOLUME_ID` set to the same network volume ID when
+recreating a Pod. The deployment helpers automatically attach that existing
+volume at `/workspace`.
+
 ## 2. Build And Publish The Image
 
 Build this image on a machine with Docker and push it to a registry:
@@ -56,9 +60,21 @@ Review the defaults in `scripts/create_runpod_pod.sh`, then run:
 bash scripts/create_runpod_pod.sh
 ```
 
+On Windows, double-click `scripts/create_runpod_bytetrack.cmd` or
+`scripts/create_runpod_botsort.cmd`. Each button creates the matching tracker
+Pod without editing `.env`. The Pod name includes its storage type and tracker,
+for example `ai-karate-dev-disposable-bytetrack`.
+
 The helper creates a Secure Cloud GPU Pod, exposes SSH and Jupyter ports, and
-adds an automatic termination timer to limit accidental spend. If
-`RUNPOD_NETWORK_VOLUME_ID` is unset, it falls back to a 50 GB Pod volume.
+adds an automatic termination timer to limit accidental spend. It requires
+`RUNPOD_NETWORK_VOLUME_ID` by default so that recreating a Pod reconnects the
+existing `/workspace` data.
+
+For an intentionally disposable Pod volume, explicitly set:
+
+```bash
+export RUNPOD_ALLOW_EPHEMERAL_VOLUME=true
+```
 
 ## 5. Prepare The Workspace
 
