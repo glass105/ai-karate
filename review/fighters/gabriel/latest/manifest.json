@@ -1,0 +1,34 @@
+﻿{
+    "fighter":  "Gabriel",
+    "run":  "rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb",
+    "source_output":  "videos/output/gabriel/rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb",
+    "github_review_folder":  "review/fighters/gabriel/latest",
+    "uploaded_to_github":  [
+                               "summary.json",
+                               "tracks.csv",
+                               "process.log",
+                               "manifest.json"
+                           ],
+    "video_excluded_from_github":  "Fight-1_03-21-26_SaintLeo_annotated.mp4",
+    "created_at":  "2026-07-03T14:12:51.6072161-04:00",
+    "runpod":  {
+                   "pod_id":  "o4scjkk6prdrrs",
+                   "gpu":  "NVIDIA A40",
+                   "gpu_vram_requirement":  "at least 32GB",
+                   "cost_per_hour":  0.44
+               },
+    "parameters":  {
+                       "fighter_a_name":  "Gabriel",
+                       "fighter_reference_root":  "reference",
+                       "fighter_a_start":  "left",
+                       "fighter_a_glove_color":  "none",
+                       "fighter_a_reject_blue_gloves":  true,
+                       "fighter_a_reject_red_gloves":  true,
+                       "roi":  "0.2,0.2,0.8,0.9",
+                       "full_video":  true,
+                       "pose_backend":  "rtmw",
+                       "detector":  "yolo26l-pose.pt",
+                       "tracker":  "hybridsort",
+                       "face_backend":  "deepface-arcface"
+                   }
+}
