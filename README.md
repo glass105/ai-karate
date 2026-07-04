@@ -35,11 +35,37 @@ src/                     Python analysis pipeline
 tests/                   Unit tests for local logic
 scripts/                 RunPod setup helpers
 docs/runpod-setup.md     Manual RunPod setup guide
+review/fighters/         Lightweight fighter review summaries by fighter name
 videos/input/            Input videos, ignored by Git
 videos/output/           Generated artifacts, ignored by Git
 models/                  Downloaded models, ignored by Git
 chatgpt-export/          Original planning conversations
 ```
+
+## Fighter Review Outputs
+
+Small review artifacts for each fighter should be committed under:
+
+```text
+review/fighters/<fighter-name>/latest/
+```
+
+Example:
+
+```text
+review/fighters/gabriel/latest/manifest.json
+review/fighters/gabriel/latest/summary.json
+```
+
+Use lowercase folder names for fighters, such as `gabriel` or `john-smith`. Keep heavy generated artifacts out of GitHub, including annotated videos, large CSV files, frame dumps, logs, and model weights. Those should remain in `videos/output/`, RunPod storage, or another artifact store.
+
+Older or experimental review summaries can be preserved under:
+
+```text
+review/fighters/<fighter-name>/runs/<run-label>/
+```
+
+See [review/fighters/README.md](review/fighters/README.md) for the review directory policy.
 
 ## Run Locally
 
