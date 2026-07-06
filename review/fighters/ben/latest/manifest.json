@@ -1,8 +1,9 @@
 ﻿{
     "fighter":  "Ben",
-    "generated_at":  "2026-07-06T14:24:03.0267523Z",
-    "source_output_dir":  "C:\\Users\\joerc\\OneDrive\\Documents\\AI-Karate\\videos\\output\\ben\\rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb-rerun",
-    "github_path":  "review/fighters/ben/latest",
+    "generated_at":  "2026-07-06T21:11:26.5966994Z",
+    "source_output_dir":  "C:\\Users\\joerc\\OneDrive\\Documents\\AI-Karate\\videos\\output\\ben\\rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-32gb",
+    "github_path":  "review/fighters/ben/competition-bluetorso-l40-full",
+    "latest_github_path":  "review/fighters/ben/latest",
     "uploaded_files":  [
                            "manifest.json",
                            "process.log",
@@ -12,13 +13,20 @@
     "excluded_files":  [
                            "*.mp4"
                        ],
+    "runpod":  {
+                   "pod_id":  "5lxron7844hc9g",
+                   "gpu":  "NVIDIA L40",
+                   "gpu_vram_requirement":  "at least 32GB",
+                   "cost_per_hr":  0.69,
+                   "removed_after_completion":  true
+               },
     "run":  {
                 "input":  "videos/input/WhatsApp Video 2026-07-05 at 8.20.23 AM.mp4",
                 "pose_backend":  "rtmw",
                 "model":  "yolo26l-pose.pt",
                 "rtm_detector_backend":  "yolo",
                 "tracker":  "hybridsort",
-                "experiment_label":  "ben-rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb-rerun",
+                "experiment_label":  "ben-rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-32gb",
                 "duration_seconds":  308.028,
                 "frames_processed":  9242,
                 "arena_roi":  [
@@ -28,27 +36,33 @@
                                   0.9
                               ]
             },
+    "settings":  {
+                     "fighter_a_name":  "Ben",
+                     "fighter_reference_root":  "reference",
+                     "fighter_a_start":  "right",
+                     "fighter_a_glove_color":  "none",
+                     "fighter_a_reject_blue_gloves":  true,
+                     "fighter_a_reject_red_gloves":  true,
+                     "fighter_a_clothing_mode":  "competition",
+                     "fighter_a_reject_blue_torso":  true
+                 },
     "identity":  {
-                     "fighter_frames":  4140,
-                     "identity_resets":  35,
-                     "identity_recoveries":  37,
+                     "fighter_frames":  3268,
+                     "identity_resets":  29,
+                     "identity_recoveries":  31,
                      "track_ids":  [
                                        2,
                                        3,
                                        8,
                                        12,
-                                       13,
-                                       14,
+                                       17,
                                        21,
                                        28,
                                        31,
                                        32,
-                                       33,
                                        38,
-                                       40,
                                        46,
                                        47,
-                                       49,
                                        50,
                                        54,
                                        57,
@@ -59,8 +73,8 @@
                                        80,
                                        92,
                                        94,
+                                       96,
                                        98,
-                                       99,
                                        100,
                                        106,
                                        112,
@@ -68,13 +82,13 @@
                                    ]
                  },
     "counts":  {
-                   "punches":  16,
-                   "fake_punches":  11,
+                   "punches":  9,
+                   "fake_punches":  7,
                    "kicks":  1
                },
     "counts_per_60_seconds":  {
-                                  "punches":  3.117,
-                                  "fake_punches":  2.143,
+                                  "punches":  1.753,
+                                  "fake_punches":  1.364,
                                   "kicks":  0.195
                               }
 }
