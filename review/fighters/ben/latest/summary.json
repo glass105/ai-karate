@@ -4,7 +4,7 @@
   "model": "yolo26l-pose.pt",
   "rtm_detector_backend": "yolo",
   "tracker": "hybridsort",
-  "experiment_label": "ben-rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb",
+  "experiment_label": "ben-rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb-rerun",
   "fps": 30.003724764504053,
   "max_seconds": 0.0,
   "duration_seconds": 308.028,
@@ -73,6 +73,8 @@
     "min_exclude_reference_match_score": 0.9,
     "min_exclude_body_match_score": 0.97,
     "min_exclude_face_match_score": 0.45,
+    "body_exclude_conflict_score": 0.93,
+    "body_exclude_conflict_pose_override_score": 0.9,
     "exclude_reference_hard_veto": false,
     "exclude_veto_confirmation_frames": 4,
     "exclude_allow_strong_face_match": true,
@@ -94,8 +96,8 @@
     0.8,
     0.9
   ],
-  "gabriel_frames": 5432,
-  "fighter_a_track_id": 112,
+  "gabriel_frames": 4140,
+  "fighter_a_track_id": 115,
   "fighter_a_track_ids": [
     2,
     3,
@@ -103,36 +105,34 @@
     12,
     13,
     14,
-    18,
     21,
-    23,
-    29,
+    28,
+    31,
     32,
     33,
-    34,
-    39,
-    41,
-    48,
+    38,
+    40,
+    46,
+    47,
     49,
-    51,
-    53,
+    50,
+    54,
     57,
-    60,
-    61,
-    66,
-    68,
-    70,
-    83,
-    95,
-    97,
-    102,
-    103,
-    109,
+    58,
+    63,
+    65,
+    67,
+    80,
+    92,
+    94,
+    98,
+    99,
+    100,
+    106,
     112,
-    115,
-    118
+    115
   ],
-  "identity_recoveries": 41,
+  "identity_recoveries": 37,
   "identity_resets": 35,
   "counts_by_track_id": {
     "8": {
@@ -151,59 +151,54 @@
       "kicks": 0
     },
     "21": {
-      "punches": 3,
-      "fake_punches": 1,
-      "kicks": 0
-    },
-    "29": {
-      "punches": 1,
-      "fake_punches": 1,
-      "kicks": 0
-    },
-    "57": {
-      "punches": 0,
-      "fake_punches": 1,
-      "kicks": 0
-    },
-    "68": {
-      "punches": 0,
-      "fake_punches": 1,
-      "kicks": 0
-    },
-    "70": {
-      "punches": 3,
-      "fake_punches": 1,
-      "kicks": 0
-    },
-    "83": {
-      "punches": 3,
-      "fake_punches": 0,
-      "kicks": 0
-    },
-    "102": {
       "punches": 2,
       "fake_punches": 1,
       "kicks": 0
     },
-    "109": {
+    "28": {
+      "punches": 1,
+      "fake_punches": 1,
+      "kicks": 0
+    },
+    "54": {
       "punches": 0,
       "fake_punches": 1,
       "kicks": 0
     },
-    "112": {
-      "punches": 1,
-      "fake_punches": 0,
+    "65": {
+      "punches": 0,
+      "fake_punches": 1,
+      "kicks": 0
+    },
+    "67": {
+      "punches": 3,
+      "fake_punches": 1,
+      "kicks": 0
+    },
+    "80": {
+      "punches": 3,
+      "fake_punches": 1,
+      "kicks": 0
+    },
+    "99": {
+      "punches": 2,
+      "fake_punches": 1,
+      "kicks": 0
+    },
+    "106": {
+      "punches": 0,
+      "fake_punches": 1,
       "kicks": 0
     }
   },
   "named_fighter_candidate_counts": {
-    "punches": 18,
-    "fake_punches": 10,
+    "punches": 16,
+    "fake_punches": 11,
     "kicks": 1
   },
   "named_fighter_candidate_counts_per_60_seconds": {
-    "punches": 3.506,
-    "fake_punches": 1.948,
+    "punches": 3.117,
+    "fake_punches": 2.143,
     "kicks": 0.195
   },
   "strike_counter": {
@@ -248,7 +243,7 @@
     "counts_only_selected_fighter": true
   },
   "artifacts": {
-    "annotated_video": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb/WhatsApp Video 2026-07-05 at 8.20.23 AM_annotated.mp4",
-    "tracks_csv": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb/WhatsApp Video 2026-07-05 at 8.20.23 AM_tracks.csv"
+    "annotated_video": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb-rerun/WhatsApp Video 2026-07-05 at 8.20.23 AM_annotated.mp4",
+    "tracks_csv": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb-rerun/WhatsApp Video 2026-07-05 at 8.20.23 AM_tracks.csv"
   }
 }
