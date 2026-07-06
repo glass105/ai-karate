@@ -111,6 +111,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-min-exclude-body-match-score", default=0.97, type=float)
     parser.add_argument("--fighter-a-min-exclude-face-match-score", default=0.45, type=float)
     parser.add_argument(
+        "--fighter-a-body-exclude-conflict-score",
+        default=0.93,
+        type=float,
+        help=(
+            "Body-only exclude score that is suspicious enough to suppress a candidate/locked "
+            "identity unless there is strong positive face or body evidence."
+        ),
+    )
+    parser.add_argument(
+        "--fighter-a-body-exclude-conflict-pose-override-score",
+        default=0.90,
+        type=float,
+        help="Positive reference/body score required to override a body-only exclude conflict.",
+    )
+    parser.add_argument(
         "--fighter-a-exclude-reference-hard-veto",
         action="store_true",
         help="Treat exclude reference matches as hard negatives that red/pose/continuity cannot rescue.",
@@ -983,6 +998,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         min_exclude_reference_match_score=args.fighter_a_min_exclude_reference_match_score,
         min_exclude_body_match_score=args.fighter_a_min_exclude_body_match_score,
         min_exclude_face_match_score=args.fighter_a_min_exclude_face_match_score,
+        body_exclude_conflict_score=args.fighter_a_body_exclude_conflict_score,
+        body_exclude_conflict_pose_override_score=args.fighter_a_body_exclude_conflict_pose_override_score,
         exclude_veto_confirmation_frames=args.fighter_a_exclude_veto_confirmation_frames,
         reset_after_missing_frames=args.reset_to_start_side_after_missing,
         recovery_confirmation_frames=args.identity_recovery_confirmation_frames,
@@ -1339,6 +1356,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "min_exclude_reference_match_score": args.fighter_a_min_exclude_reference_match_score,
             "min_exclude_body_match_score": args.fighter_a_min_exclude_body_match_score,
             "min_exclude_face_match_score": args.fighter_a_min_exclude_face_match_score,
+            "body_exclude_conflict_score": args.fighter_a_body_exclude_conflict_score,
+            "body_exclude_conflict_pose_override_score": args.fighter_a_body_exclude_conflict_pose_override_score,
             "exclude_reference_hard_veto": args.fighter_a_exclude_reference_hard_veto,
             "exclude_veto_confirmation_frames": args.fighter_a_exclude_veto_confirmation_frames,
             "exclude_allow_strong_face_match": args.fighter_a_exclude_allow_strong_face_match,

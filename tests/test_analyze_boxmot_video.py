@@ -200,6 +200,8 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.fighter_a_min_exclude_reference_match_score, 0.9)
         self.assertEqual(args.fighter_a_min_exclude_body_match_score, 0.97)
         self.assertEqual(args.fighter_a_min_exclude_face_match_score, 0.45)
+        self.assertEqual(args.fighter_a_body_exclude_conflict_score, 0.93)
+        self.assertEqual(args.fighter_a_body_exclude_conflict_pose_override_score, 0.9)
         self.assertFalse(args.fighter_a_exclude_reference_hard_veto)
         self.assertEqual(args.fighter_a_exclude_veto_confirmation_frames, 4)
         self.assertTrue(args.fighter_a_exclude_allow_strong_face_match)

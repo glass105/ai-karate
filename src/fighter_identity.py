@@ -138,6 +138,8 @@ class FighterIdentity:
         min_exclude_reference_match_score: float = 0.80,
         min_exclude_body_match_score: float | None = None,
         min_exclude_face_match_score: float = 0.45,
+        body_exclude_conflict_score: float = 0.93,
+        body_exclude_conflict_pose_override_score: float = 0.90,
         exclude_veto_confirmation_frames: int = 3,
         reset_after_missing_frames: int = 10,
         recovery_confirmation_frames: int = 3,
@@ -212,6 +214,8 @@ class FighterIdentity:
             else min_exclude_reference_match_score
         )
         self.min_exclude_face_match_score = min_exclude_face_match_score
+        self.body_exclude_conflict_score = body_exclude_conflict_score
+        self.body_exclude_conflict_pose_override_score = body_exclude_conflict_pose_override_score
         self.exclude_veto_confirmation_frames = exclude_veto_confirmation_frames
         self.reset_after_missing_frames = reset_after_missing_frames
         self.recovery_confirmation_frames = recovery_confirmation_frames
@@ -437,11 +441,15 @@ class FighterIdentity:
             self._mark_drop_pending(reason)
             return True
         self._mark_drop_pending(reason)
-        confirmation_frames = (
-            self.exclude_veto_confirmation_frames
-            if reason == "exclude_reference" and self.exclude_reference_hard_veto
-            else self.locked_fighter_drop_confirmation_frames
-        )
+        if reason == "exclude_reference" and (
+            self.exclude_reference_hard_veto or self._has_body_exclude_conflict(box)
+        ):
+            confirmation_frames = min(
+                self.exclude_veto_confirmation_frames,
+                self.locked_fighter_drop_confirmation_frames,
+            )
+        else:
+            confirmation_frames = self.locked_fighter_drop_confirmation_frames
         return self._drop_frames < confirmation_frames
 
     def _is_positionally_plausible(self, box: TrackedBox) -> bool:
@@ -800,6 +808,8 @@ class FighterIdentity:
             and box.exclude_face_match_score >= self.min_exclude_face_match_score
         ):
             return True
+        if self._has_body_exclude_conflict(box):
+            return True
         return self._body_exclude_is_hard(box)
 
     def _body_exclude_is_hard(self, box: TrackedBox) -> bool:
@@ -813,6 +823,21 @@ class FighterIdentity:
         if box.exclude_body_match_score > 0.0:
             return box.exclude_body_match_score
         return box.exclude_reference_match_score
+
+    def _has_body_exclude_conflict(self, box: TrackedBox) -> bool:
+        if not self.reject_exclude_reference_match:
+            return False
+        if self._exclude_body_score(box) < self.body_exclude_conflict_score:
+            return False
+        if self._has_strong_gabriel_face_match(box):
+            return False
+        return not self._has_strong_gabriel_body_match(box)
+
+    def _has_strong_gabriel_body_match(self, box: TrackedBox) -> bool:
+        return (
+            max(box.reference_match_score, box.pose_reference_match_score)
+            >= self.body_exclude_conflict_pose_override_score
+        )
 
     def _has_meaningful_gabriel_evidence(self, box: TrackedBox) -> bool:
         expected_gloves = self._expected_glove_thresholds(box)
@@ -860,6 +885,8 @@ class FighterIdentity:
             box.exclude_face_detected
             and box.exclude_face_match_score >= self.min_exclude_face_match_score
         ):
+            return False
+        if self._has_body_exclude_conflict(box):
             return False
         if self._lock_frames < self.confirmed_lock_min_frames:
             return True

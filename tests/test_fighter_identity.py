@@ -738,6 +738,86 @@ class FighterIdentityTests(unittest.TestCase):
         self.assertEqual(identity.label(10), "fighter-10")
         self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference")
 
+    def test_body_exclude_conflict_drops_existing_lock_after_veto_confirmation_frames(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_exclude_reference_match=True,
+            min_exclude_body_match_score=0.97,
+            body_exclude_conflict_score=0.93,
+            body_exclude_conflict_pose_override_score=0.90,
+            exclude_veto_confirmation_frames=2,
+            locked_fighter_drop_confirmation_frames=10,
+            confirmed_lock_min_frames=1,
+        )
+        identity.observe([TrackedBox(10, 100, 0, 300, 400, exclude_body_match_score=0.1)])
+
+        first = identity.observe(
+            [
+                TrackedBox(
+                    10,
+                    102,
+                    0,
+                    302,
+                    400,
+                    reference_match_score=0.71,
+                    pose_reference_match_score=0.83,
+                    exclude_reference_match_score=0.94,
+                    exclude_body_match_score=0.94,
+                )
+            ]
+        )
+        second = identity.observe(
+            [
+                TrackedBox(
+                    10,
+                    102,
+                    0,
+                    302,
+                    400,
+                    reference_match_score=0.71,
+                    pose_reference_match_score=0.83,
+                    exclude_reference_match_score=0.94,
+                    exclude_body_match_score=0.94,
+                )
+            ]
+        )
+
+        self.assertEqual(first, 10)
+        self.assertIsNone(second)
+        self.assertEqual(identity.label(10), "fighter-10")
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "exclude_reference")
+        self.assertTrue(identity.identity_scores[10].hard_reject_active)
+
+    def test_body_exclude_conflict_can_be_overridden_by_strong_body_match(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_exclude_reference_match=True,
+            min_exclude_body_match_score=0.97,
+            body_exclude_conflict_score=0.93,
+            body_exclude_conflict_pose_override_score=0.90,
+            confirmed_lock_min_frames=1,
+        )
+
+        selected = identity.observe(
+            [
+                TrackedBox(
+                    10,
+                    100,
+                    0,
+                    300,
+                    400,
+                    pose_reference_match_score=0.92,
+                    exclude_reference_match_score=0.94,
+                    exclude_body_match_score=0.94,
+                )
+            ]
+        )
+
+        self.assertEqual(selected, 10)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "")
+
     def test_lineup_pause_keeps_initial_left_side(self) -> None:
         identity = FighterIdentity(
             "Gabriel",
