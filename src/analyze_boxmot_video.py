@@ -85,10 +85,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-reject-white-gloves", action="store_true")
     parser.add_argument("--fighter-a-reject-blue-gloves", action="store_true")
     parser.add_argument(
+        "--fighter-a-clothing-mode",
+        choices=("competition", "practice", "none"),
+        default="competition",
+        help=(
+            "Competition expects white torso/leg clothing, practice allows varied clothing, "
+            "and none disables clothing-based identity filtering."
+        ),
+    )
+    parser.add_argument(
         "--fighter-a-reject-blue-torso",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Reject non-fighter candidates wearing blue torso clothing, such as blue-suited referees.",
+        help="Reject blue torso clothing in competition/practice clothing modes, such as blue-suited referees.",
     )
     parser.add_argument("--fighter-a-min-blue-torso-score", default=0.18, type=float)
     parser.add_argument("--fighter-a-min-white-uniform-score", default=0.20, type=float)
@@ -806,6 +815,7 @@ def competition_fighter_score(
     candidate: dict[str, Any],
     roi_box: tuple[int, int, int, int],
     *,
+    clothing_mode: str = "competition",
     reject_blue_torso: bool = True,
     min_blue_torso_score: float = 0.18,
     min_white_uniform_score: float = 0.20,
@@ -832,7 +842,9 @@ def competition_fighter_score(
         return 0.0
     blue_torso = candidate.get("blue_torso_score", 0.0)
     white_uniform = candidate.get("white_uniform_score", 0.0)
-    if reject_blue_torso and blue_torso >= min_blue_torso_score and white_uniform < min_white_uniform_score:
+    if clothing_mode == "competition" and reject_blue_torso and blue_torso >= min_blue_torso_score and white_uniform < min_white_uniform_score:
+        return 0.0
+    if clothing_mode == "practice" and reject_blue_torso and blue_torso >= min_blue_torso_score:
         return 0.0
     return 1.0
 
@@ -1002,7 +1014,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         expect_red_gloves=glove_settings["expect_red"],
         expect_white_gloves=glove_settings["expect_white"],
         expect_blue_gloves=glove_settings["expect_blue"],
-        expect_white_uniform=True,
+        expect_white_uniform=args.fighter_a_clothing_mode == "competition",
         expect_black_belt=args.fighter_a_black_belt,
         expect_taller=args.fighter_a_taller,
         require_red_gloves=glove_settings["require_red"],
@@ -1112,6 +1124,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 candidate["competition_fighter_score"] = competition_fighter_score(
                     candidate,
                     roi_box,
+                    clothing_mode=args.fighter_a_clothing_mode,
                     reject_blue_torso=args.fighter_a_reject_blue_torso,
                     min_blue_torso_score=args.fighter_a_min_blue_torso_score,
                     min_white_uniform_score=args.fighter_a_min_white_uniform_score,
@@ -1351,7 +1364,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         "fighter_a_cues": {
             "start_side": args.fighter_a_start,
             "reset_side": args.fighter_a_start,
-            "white_uniform": True,
+            "white_uniform": args.fighter_a_clothing_mode == "competition",
+            "clothing_mode": args.fighter_a_clothing_mode,
             "glove_color": args.fighter_a_glove_color,
             "glove_positive_evidence": args.fighter_a_glove_color != "none"
             or glove_settings["require_red"]

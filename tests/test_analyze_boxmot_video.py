@@ -198,6 +198,7 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.fighter_a_start, "left")
         self.assertEqual(args.fighter_a_min_white_glove_score, 0.02)
         self.assertEqual(args.fighter_a_min_blue_glove_score, 0.15)
+        self.assertEqual(args.fighter_a_clothing_mode, "competition")
         self.assertTrue(args.fighter_a_reject_blue_torso)
         self.assertEqual(args.fighter_a_min_blue_torso_score, 0.18)
         self.assertEqual(args.fighter_a_min_white_uniform_score, 0.20)
@@ -280,6 +281,30 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
 
         self.assertEqual(score, 1.0)
 
+    def test_practice_mode_rejects_blue_torso_without_white_uniform_escape(self) -> None:
+        candidate = {
+            "box": (490, 220, 602, 600),
+            "standing_score": 0.9,
+            "blue_torso_score": 0.22,
+            "white_uniform_score": 0.55,
+        }
+
+        score = competition_fighter_score(candidate, (256, 144, 1024, 648), clothing_mode="practice")
+
+        self.assertEqual(score, 0.0)
+
+    def test_none_clothing_mode_ignores_blue_torso(self) -> None:
+        candidate = {
+            "box": (490, 220, 602, 600),
+            "standing_score": 0.9,
+            "blue_torso_score": 0.45,
+            "white_uniform_score": 0.05,
+        }
+
+        score = competition_fighter_score(candidate, (256, 144, 1024, 648), clothing_mode="none")
+
+        self.assertEqual(score, 1.0)
+
     def test_measures_blue_torso_separately_from_gloves(self) -> None:
         frame = np.zeros((100, 100, 3), dtype=np.uint8)
         frame[20:65, 20:80] = (255, 0, 0)
@@ -359,6 +384,26 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.fighter_a_glove_color, "blue")
         self.assertEqual(args.fighter_a_min_blue_glove_score, 0.35)
         self.assertEqual(args.fighter_a_min_white_glove_score, 0.25)
+
+    def test_accepts_clothing_mode(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(
+            [
+                "--input",
+                "input.mp4",
+                "--output-dir",
+                "out",
+                "--pose-backend",
+                "rtmw",
+                "--tracker",
+                "hybridsort",
+                "--fighter-a-clothing-mode",
+                "practice",
+            ]
+        )
+
+        self.assertEqual(args.fighter_a_clothing_mode, "practice")
 
     def test_glove_color_selects_requirement_without_implicit_rejects(self) -> None:
         parser = build_parser()
