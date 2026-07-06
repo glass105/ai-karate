@@ -24,6 +24,7 @@ class TrackedBox:
     white_uniform_score: float = 0.0
     black_belt_score: float = 0.0
     blue_glove_score: float = 0.0
+    blue_torso_score: float = 0.0
     standing_score: float = 1.0
     reference_match_score: float = 0.0
     pose_reference_match_score: float = 0.0
@@ -63,6 +64,7 @@ class IdentityScore:
     red_wrist_score: float
     white_glove_score: float
     blue_glove_score: float
+    blue_torso_score: float
     pose_reference_score: float
     face_match_score: float
     face_detected: bool
@@ -706,6 +708,7 @@ class FighterIdentity:
                 red_wrist_score=box.red_glove_score,
                 white_glove_score=box.white_glove_score,
                 blue_glove_score=box.blue_glove_score,
+                blue_torso_score=box.blue_torso_score,
                 pose_reference_score=box.pose_reference_match_score,
                 face_match_score=box.face_match_score,
                 face_detected=box.face_detected,

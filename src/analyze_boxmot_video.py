@@ -84,6 +84,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-reject-red-gloves", action="store_true")
     parser.add_argument("--fighter-a-reject-white-gloves", action="store_true")
     parser.add_argument("--fighter-a-reject-blue-gloves", action="store_true")
+    parser.add_argument(
+        "--fighter-a-reject-blue-torso",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reject non-fighter candidates wearing blue torso clothing, such as blue-suited referees.",
+    )
+    parser.add_argument("--fighter-a-min-blue-torso-score", default=0.18, type=float)
+    parser.add_argument("--fighter-a-min-white-uniform-score", default=0.20, type=float)
     parser.add_argument("--fighter-a-require-standing", action="store_true")
     parser.add_argument(
         "--fighter-a-require-competition-fighter",
@@ -530,6 +538,7 @@ def yolo_candidates(result: Any, frame: Any, threshold: float) -> list[dict[str,
             xyxy = box.xyxy[0].cpu().tolist()
             candidate_box = tuple(int(value) for value in xyxy)
             red_score, white_glove_score, white_score, black_belt_score, blue_score = color_scores(frame, points, scores, candidate_box)
+            blue_torso = torso_blue_score(frame, candidate_box)
             candidates.append(
                 {
                     "box": candidate_box,
@@ -543,6 +552,7 @@ def yolo_candidates(result: Any, frame: Any, threshold: float) -> list[dict[str,
                     "white_uniform_score": white_score,
                     "black_belt_score": black_belt_score,
                     "blue_glove_score": blue_score,
+                    "blue_torso_score": blue_torso,
                     "standing_score": standing_score(points, scores, candidate_box),
                     "confidence": float(box.conf[0]),
                 }
@@ -611,6 +621,20 @@ def reference_match_score(
     if not descriptor:
         return 0.0
     return max(_cosine_similarity(descriptor, reference) for reference in reference_descriptors)
+
+
+def torso_blue_score(frame: Any, box: tuple[int, int, int, int]) -> float:
+    """Estimate blue torso clothing separately from blue hand/wrist glove cues."""
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    height, width = frame.shape[:2]
+    x1, y1, x2, y2 = box
+    box_width, box_height = max(1, x2 - x1), max(1, y2 - y1)
+    blue_mask = cv2.inRange(hsv, (90, 55, 40), (135, 255, 255))
+    torso = blue_mask[
+        max(0, int(y1 + box_height * 0.18)) : min(height, int(y1 + box_height * 0.62)),
+        max(0, int(x1 + box_width * 0.18)) : min(width, int(x2 - box_width * 0.18)),
+    ]
+    return float(torso.mean() / 255.0) if torso.size else 0.0
 
 
 def load_pose_reference_descriptors(
@@ -695,6 +719,7 @@ def rtm_candidates(
         if candidate_box is None:
             continue
         red_score, white_glove_score, white_score, black_belt_score, blue_score = color_scores(frame, points, scores, candidate_box)
+        blue_torso = torso_blue_score(frame, candidate_box)
         candidates.append(
             {
                 "box": candidate_box,
@@ -708,6 +733,7 @@ def rtm_candidates(
                 "white_uniform_score": white_score,
                 "black_belt_score": black_belt_score,
                 "blue_glove_score": blue_score,
+                "blue_torso_score": blue_torso,
                 "standing_score": standing_score(points, scores, candidate_box),
                 "confidence": float(np.mean(scores[:17])),
             }
@@ -779,6 +805,10 @@ def draw_dashed_rectangle(
 def competition_fighter_score(
     candidate: dict[str, Any],
     roi_box: tuple[int, int, int, int],
+    *,
+    reject_blue_torso: bool = True,
+    min_blue_torso_score: float = 0.18,
+    min_white_uniform_score: float = 0.20,
 ) -> float:
     """Reject obvious mat-edge/background people before identity assignment."""
     x1, _, x2, y2 = candidate["box"]
@@ -799,6 +829,10 @@ def competition_fighter_score(
     if bottom_fraction >= 0.995 and standing < 0.65:
         return 0.0
     if bottom_fraction >= 0.92 and side_margin <= 0.10 and standing < 0.80:
+        return 0.0
+    blue_torso = candidate.get("blue_torso_score", 0.0)
+    white_uniform = candidate.get("white_uniform_score", 0.0)
+    if reject_blue_torso and blue_torso >= min_blue_torso_score and white_uniform < min_white_uniform_score:
         return 0.0
     return 1.0
 
@@ -1018,12 +1052,12 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     named_counts = {"punches": 0, "fake_punches": 0, "kicks": 0}
     fieldnames = [
         "frame", "timestamp_seconds", "track_id", "fighter_label", "confidence",
-        "bbox", "keypoints", "red_glove_score", "white_glove_score", "blue_glove_score", "white_uniform_score",
+        "bbox", "keypoints", "red_glove_score", "white_glove_score", "blue_glove_score", "blue_torso_score", "white_uniform_score",
         "black_belt_score", "standing_score", "reference_match_score", "pose_reference_match_score",
         "competition_fighter_score",
         "exclude_reference_match_score", "exclude_body_match_score", "exclude_face_detected",
         "exclude_face_match_score", "face_detected", "face_match_score", "gabriel_candidate_score", "id_red_wrist_score",
-        "id_white_glove_score", "id_blue_glove_score", "id_pose_reference_score", "id_face_detected", "id_face_match_score",
+        "id_white_glove_score", "id_blue_glove_score", "id_blue_torso_score", "id_pose_reference_score", "id_face_detected", "id_face_match_score",
         "id_exclude_reference_score", "id_exclude_body_score", "id_exclude_face_detected",
         "id_exclude_face_score", "id_competition_fighter_score", "id_continuity_score", "id_reset_side_score", "id_match_gap",
         "id_confirmed_not_top", "id_hard_reject_active", "id_rejection_reason", "id_visual_state",
@@ -1075,7 +1109,13 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             annotated = frame.copy()
             roi_box = draw_pose_candidates(annotated, candidates, roi, score_threshold=args.keypoint_threshold)
             for candidate in candidates:
-                candidate["competition_fighter_score"] = competition_fighter_score(candidate, roi_box)
+                candidate["competition_fighter_score"] = competition_fighter_score(
+                    candidate,
+                    roi_box,
+                    reject_blue_torso=args.fighter_a_reject_blue_torso,
+                    min_blue_torso_score=args.fighter_a_min_blue_torso_score,
+                    min_white_uniform_score=args.fighter_a_min_white_uniform_score,
+                )
                 candidate["reference_match_score"] = reference_match_score(
                     frame,
                     candidate["box"],
@@ -1121,7 +1161,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 debug_parts = []
                 for score in sorted(identity_scores.values(), key=lambda item: item.gabriel_candidate_score, reverse=True)[:4]:
                     debug_parts.append(
-                        "track={track} score={score:.3f} red={red:.3f} white={white:.3f} blue={blue:.3f} pose={pose:.3f} "
+                        "track={track} score={score:.3f} red={red:.3f} white={white:.3f} blue={blue:.3f} blue_torso={blue_torso:.3f} pose={pose:.3f} "
                         "face_detected={face_detected} face={face:.3f} "
                         "excl_body={exclude_body:.3f} excl_face={exclude_face:.3f} excl_final={exclude:.3f} "
                         "comp={competition:.3f} "
@@ -1133,6 +1173,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                             red=score.red_wrist_score,
                             white=score.white_glove_score,
                             blue=score.blue_glove_score,
+                            blue_torso=score.blue_torso_score,
                             pose=score.pose_reference_score,
                             face_detected=score.face_detected,
                             face=score.face_match_score,
@@ -1166,7 +1207,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                 overlay_text = (
                     f"id={candidate['track_id']} gab={score.gabriel_candidate_score:.2f} "
                     f"red={score.red_wrist_score:.2f} white={score.white_glove_score:.2f} "
-                    f"blue={score.blue_glove_score:.2f} xb={score.exclude_body_score:.2f} "
+                    f"blue={score.blue_glove_score:.2f} bt={score.blue_torso_score:.2f} xb={score.exclude_body_score:.2f} "
                     f"xf={score.exclude_face_score:.2f} x={score.exclude_reference_score:.2f} "
                     f"comp={score.competition_fighter_score:.2f} {rejection}"
                 )
@@ -1246,6 +1287,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "red_glove_score": round(candidate["red_glove_score"], 4),
                         "white_glove_score": round(candidate["white_glove_score"], 4),
                         "blue_glove_score": round(candidate["blue_glove_score"], 4),
+                        "blue_torso_score": round(candidate.get("blue_torso_score", 0.0), 4),
                         "white_uniform_score": round(candidate["white_uniform_score"], 4),
                         "black_belt_score": round(candidate["black_belt_score"], 4),
                         "standing_score": round(candidate["standing_score"], 4),
@@ -1262,6 +1304,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "id_red_wrist_score": round(score.red_wrist_score, 4) if score else 0.0,
                         "id_white_glove_score": round(score.white_glove_score, 4) if score else 0.0,
                         "id_blue_glove_score": round(score.blue_glove_score, 4) if score else 0.0,
+                        "id_blue_torso_score": round(score.blue_torso_score, 4) if score else 0.0,
                         "id_pose_reference_score": round(score.pose_reference_score, 4) if score else 0.0,
                         "id_face_detected": score.face_detected if score else False,
                         "id_face_match_score": round(score.face_match_score, 4) if score else 0.0,
@@ -1331,6 +1374,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "reject_red_gloves": glove_settings["reject_red"],
             "reject_white_gloves": glove_settings["reject_white"],
             "reject_blue_gloves": glove_settings["reject_blue"],
+            "reject_blue_torso": args.fighter_a_reject_blue_torso,
             "require_standing": args.fighter_a_require_standing,
             "require_competition_fighter": args.fighter_a_require_competition_fighter,
             "reference_images": [str(path) for path in reference_paths],
@@ -1348,6 +1392,8 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "min_red_glove_score": args.fighter_a_min_red_glove_score,
             "min_white_glove_score": args.fighter_a_min_white_glove_score,
             "min_blue_glove_score": args.fighter_a_min_blue_glove_score,
+            "min_blue_torso_score": args.fighter_a_min_blue_torso_score,
+            "min_white_uniform_score": args.fighter_a_min_white_uniform_score,
             "glove_reject_hold_frames": args.fighter_a_glove_reject_hold_frames,
             "min_standing_score": args.fighter_a_min_standing_score,
             "min_reference_match_score": args.fighter_a_min_reference_match_score,

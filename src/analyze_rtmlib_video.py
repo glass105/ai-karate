@@ -267,6 +267,7 @@ def identity_box(candidate: dict[str, Any], frame: Any) -> TrackedBox:
         candidate["white_uniform_score"],
         candidate["black_belt_score"],
         candidate["blue_glove_score"],
+        candidate.get("blue_torso_score", 0.0),
         candidate["standing_score"],
         candidate.get("reference_match_score", 0.0),
         candidate.get("pose_reference_match_score", 0.0),

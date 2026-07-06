@@ -17,6 +17,7 @@ from src.analyze_boxmot_video import (
     patch_rtm_fp16_input,
     reference_match_score,
     rtm_candidates,
+    torso_blue_score,
 )
 
 
@@ -197,6 +198,9 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.fighter_a_start, "left")
         self.assertEqual(args.fighter_a_min_white_glove_score, 0.02)
         self.assertEqual(args.fighter_a_min_blue_glove_score, 0.15)
+        self.assertTrue(args.fighter_a_reject_blue_torso)
+        self.assertEqual(args.fighter_a_min_blue_torso_score, 0.18)
+        self.assertEqual(args.fighter_a_min_white_uniform_score, 0.20)
         self.assertEqual(args.fighter_a_min_exclude_reference_match_score, 0.9)
         self.assertEqual(args.fighter_a_min_exclude_body_match_score, 0.97)
         self.assertEqual(args.fighter_a_min_exclude_face_match_score, 0.45)
@@ -251,6 +255,38 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         score = competition_fighter_score(candidate, (256, 144, 1024, 648))
 
         self.assertEqual(score, 1.0)
+
+    def test_rejects_blue_torso_non_fighter(self) -> None:
+        candidate = {
+            "box": (490, 220, 602, 600),
+            "standing_score": 0.9,
+            "blue_torso_score": 0.45,
+            "white_uniform_score": 0.05,
+        }
+
+        score = competition_fighter_score(candidate, (256, 144, 1024, 648))
+
+        self.assertEqual(score, 0.0)
+
+    def test_keeps_white_uniform_even_with_blue_artifact(self) -> None:
+        candidate = {
+            "box": (490, 220, 602, 600),
+            "standing_score": 0.9,
+            "blue_torso_score": 0.22,
+            "white_uniform_score": 0.55,
+        }
+
+        score = competition_fighter_score(candidate, (256, 144, 1024, 648))
+
+        self.assertEqual(score, 1.0)
+
+    def test_measures_blue_torso_separately_from_gloves(self) -> None:
+        frame = np.zeros((100, 100, 3), dtype=np.uint8)
+        frame[20:65, 20:80] = (255, 0, 0)
+
+        score = torso_blue_score(frame, (10, 0, 90, 100))
+
+        self.assertGreater(score, 0.5)
 
     def test_normalizes_opponent_distance_by_average_fighter_height(self) -> None:
         fighter = {"track_id": 7, "box": (0, 0, 100, 200), "competition_fighter_score": 1.0}
