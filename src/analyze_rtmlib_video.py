@@ -89,7 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fighter-a-reject-white-gloves", action="store_true")
     parser.add_argument("--fighter-a-reject-blue-gloves", action="store_true")
     parser.add_argument("--fighter-a-require-standing", action="store_true")
-    parser.add_argument("--fighter-a-min-red-glove-score", default=0.15, type=float)
+    parser.add_argument("--fighter-a-min-red-glove-score", default=0.12, type=float)
     parser.add_argument("--fighter-a-min-white-glove-score", default=0.02, type=float)
     parser.add_argument("--fighter-a-min-blue-glove-score", default=0.15, type=float)
     parser.add_argument(
