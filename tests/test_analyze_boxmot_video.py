@@ -193,7 +193,7 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(args.fighter_a_min_red_glove_score, 0.12)
+        self.assertEqual(args.fighter_a_min_red_glove_score, 0.08)
         self.assertEqual(args.fighter_a_glove_color, "red")
         self.assertEqual(args.fighter_a_start, "left")
         self.assertEqual(args.fighter_a_min_white_glove_score, 0.02)

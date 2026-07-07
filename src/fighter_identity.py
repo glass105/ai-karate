@@ -129,7 +129,7 @@ class FighterIdentity:
         reject_exclude_reference_match: bool = False,
         exclude_reference_hard_veto: bool = False,
         exclude_veto_allow_strong_face_match: bool = False,
-        min_red_glove_score: float = 0.15,
+        min_red_glove_score: float = 0.08,
         min_white_glove_score: float = 0.02,
         min_blue_glove_score: float = 0.15,
         glove_reject_hold_frames: int = 5,

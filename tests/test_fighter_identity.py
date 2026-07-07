@@ -196,6 +196,7 @@ class FighterIdentityTests(unittest.TestCase):
             "left",
             require_blue_gloves=True,
             reject_red_gloves=True,
+            min_red_glove_score=0.15,
             min_blue_glove_score=0.2,
             recovery_confirmation_frames=1,
         )
@@ -495,6 +496,7 @@ class FighterIdentityTests(unittest.TestCase):
             require_red_gloves=True,
             reject_blue_gloves=True,
             require_standing=True,
+            min_red_glove_score=0.15,
         )
 
         identity.observe(
