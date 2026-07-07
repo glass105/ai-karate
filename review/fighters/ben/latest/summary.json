@@ -4,7 +4,7 @@
   "model": "yolo26l-pose.pt",
   "rtm_detector_backend": "yolo",
   "tracker": "hybridsort",
-  "experiment_label": "ben-rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-32gb",
+  "experiment_label": "ben-rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-red008-l4\r",
   "fps": 30.003724764504053,
   "max_seconds": 0.0,
   "duration_seconds": 308.028,
@@ -64,7 +64,7 @@
     "face_match_backend": "deepface-arcface",
     "deepface_detector_backend": "opencv",
     "reject_face_mismatch": true,
-    "min_red_glove_score": 0.15,
+    "min_red_glove_score": 0.08,
     "min_white_glove_score": 0.02,
     "min_blue_glove_score": 0.15,
     "min_blue_torso_score": 0.18,
@@ -79,7 +79,7 @@
     "min_exclude_face_match_score": 0.45,
     "body_exclude_conflict_score": 0.93,
     "body_exclude_conflict_pose_override_score": 0.9,
-    "exclude_reference_hard_veto": false,
+    "exclude_reference_hard_veto": true,
     "exclude_veto_confirmation_frames": 4,
     "exclude_allow_strong_face_match": true,
     "reset_to_start_side_after_missing_frames": 10,
@@ -100,85 +100,100 @@
     0.8,
     0.9
   ],
-  "gabriel_frames": 3268,
-  "fighter_a_track_id": 115,
+  "gabriel_frames": 2870,
+  "fighter_a_track_id": 118,
   "fighter_a_track_ids": [
     2,
     3,
     8,
-    12,
+    14,
     17,
     21,
-    28,
-    31,
+    29,
     32,
-    38,
-    46,
-    47,
-    50,
-    54,
-    57,
-    58,
-    63,
-    65,
-    67,
-    80,
-    92,
-    94,
-    96,
-    98,
-    100,
-    106,
+    33,
+    39,
+    48,
+    51,
+    53,
+    61,
+    66,
+    68,
+    70,
+    83,
+    95,
+    97,
+    99,
+    101,
+    103,
+    107,
+    109,
     112,
-    115
+    115,
+    118
   ],
-  "identity_recoveries": 31,
-  "identity_resets": 29,
+  "identity_recoveries": 33,
+  "identity_resets": 28,
   "counts_by_track_id": {
     "8": {
+      "punches": 2,
+      "fake_punches": 0,
+      "kicks": 1
+    },
+    "14": {
       "punches": 1,
       "fake_punches": 1,
-      "kicks": 1
+      "kicks": 0
     },
     "21": {
       "punches": 2,
       "fake_punches": 1,
       "kicks": 0
     },
-    "54": {
+    "29": {
       "punches": 0,
       "fake_punches": 1,
       "kicks": 0
     },
-    "65": {
+    "51": {
+      "punches": 1,
+      "fake_punches": 0,
+      "kicks": 0
+    },
+    "68": {
       "punches": 0,
       "fake_punches": 1,
       "kicks": 0
     },
-    "67": {
+    "70": {
       "punches": 3,
       "fake_punches": 1,
       "kicks": 0
     },
-    "80": {
+    "83": {
       "punches": 3,
+      "fake_punches": 0,
+      "kicks": 0
+    },
+    "109": {
+      "punches": 0,
       "fake_punches": 1,
       "kicks": 0
     },
-    "106": {
-      "punches": 0,
-      "fake_punches": 1,
+    "112": {
+      "punches": 1,
+      "fake_punches": 0,
       "kicks": 0
     }
   },
   "named_fighter_candidate_counts": {
-    "punches": 9,
-    "fake_punches": 7,
+    "punches": 13,
+    "fake_punches": 6,
     "kicks": 1
   },
   "named_fighter_candidate_counts_per_60_seconds": {
-    "punches": 1.753,
-    "fake_punches": 1.364,
+    "punches": 2.532,
+    "fake_punches": 1.169,
     "kicks": 0.195
   },
   "strike_counter": {
@@ -223,7 +238,7 @@
     "counts_only_selected_fighter": true
   },
   "artifacts": {
-    "annotated_video": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-32gb/WhatsApp Video 2026-07-05 at 8.20.23 AM_annotated.mp4",
-    "tracks_csv": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-32gb/WhatsApp Video 2026-07-05 at 8.20.23 AM_tracks.csv"
+    "annotated_video": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-red008-l4/WhatsApp Video 2026-07-05 at 8.20.23 AM_annotated.mp4",
+    "tracks_csv": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-red008-l4/WhatsApp Video 2026-07-05 at 8.20.23 AM_tracks.csv"
   }
 }

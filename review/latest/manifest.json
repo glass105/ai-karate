@@ -1,94 +1,27 @@
 ﻿{
     "fighter":  "Ben",
-    "generated_at":  "2026-07-06T21:11:26.5966994Z",
-    "source_output_dir":  "C:\\Users\\joerc\\OneDrive\\Documents\\AI-Karate\\videos\\output\\ben\\rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-32gb",
-    "github_path":  "review/fighters/ben/competition-bluetorso-l40-full",
+    "run":  "rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-red008-l4",
+    "source_directory":  "C:\\Users\\joerc\\OneDrive\\Documents\\AI-Karate\\videos\\output\\ben\\rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-red008-l4",
+    "github_path":  "review/latest",
+    "run_github_path":  "review/fighters/ben/runs/rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-red008-l4",
     "latest_github_path":  "review/fighters/ben/latest",
-    "uploaded_files":  [
-                           "manifest.json",
-                           "process.log",
-                           "summary.json",
-                           "tracks.csv"
-                       ],
-    "excluded_files":  [
-                           "*.mp4"
-                       ],
-    "runpod":  {
-                   "pod_id":  "5lxron7844hc9g",
-                   "gpu":  "NVIDIA L40",
-                   "gpu_vram_requirement":  "at least 32GB",
-                   "cost_per_hr":  0.69,
-                   "removed_after_completion":  true
-               },
-    "run":  {
-                "input":  "videos/input/WhatsApp Video 2026-07-05 at 8.20.23 AM.mp4",
-                "pose_backend":  "rtmw",
-                "model":  "yolo26l-pose.pt",
-                "rtm_detector_backend":  "yolo",
-                "tracker":  "hybridsort",
-                "experiment_label":  "ben-rtmw-yolo26l-hybridsort-arcface-competition-bluetorso-roi20y20-full-32gb",
-                "duration_seconds":  308.028,
-                "frames_processed":  9242,
-                "arena_roi":  [
-                                  0.2,
-                                  0.2,
-                                  0.8,
-                                  0.9
-                              ]
-            },
-    "settings":  {
-                     "fighter_a_name":  "Ben",
-                     "fighter_reference_root":  "reference",
-                     "fighter_a_start":  "right",
-                     "fighter_a_glove_color":  "none",
-                     "fighter_a_reject_blue_gloves":  true,
-                     "fighter_a_reject_red_gloves":  true,
-                     "fighter_a_clothing_mode":  "competition",
-                     "fighter_a_reject_blue_torso":  true
-                 },
-    "identity":  {
-                     "fighter_frames":  3268,
-                     "identity_resets":  29,
-                     "identity_recoveries":  31,
-                     "track_ids":  [
-                                       2,
-                                       3,
-                                       8,
-                                       12,
-                                       17,
-                                       21,
-                                       28,
-                                       31,
-                                       32,
-                                       38,
-                                       46,
-                                       47,
-                                       50,
-                                       54,
-                                       57,
-                                       58,
-                                       63,
-                                       65,
-                                       67,
-                                       80,
-                                       92,
-                                       94,
-                                       96,
-                                       98,
-                                       100,
-                                       106,
-                                       112,
-                                       115
-                                   ]
-                 },
-    "counts":  {
-                   "punches":  9,
-                   "fake_punches":  7,
-                   "kicks":  1
-               },
-    "counts_per_60_seconds":  {
-                                  "punches":  1.753,
-                                  "fake_punches":  1.364,
-                                  "kicks":  0.195
-                              }
+    "published_at_utc":  "2026-07-07T14:33:03.4451932Z",
+    "excludes_video":  true,
+    "files":  [
+                  {
+                      "name":  "summary.json",
+                      "bytes":  7157,
+                      "sha256":  "ac878fea847cd7b1fed33067189f082f886f44d9eca3b9c1eab73b1c85b40ce2"
+                  },
+                  {
+                      "name":  "tracks.csv",
+                      "bytes":  20769461,
+                      "sha256":  "0ca440a7c5dfd50d003ac5651dec207087326bcc5c7417847ea1306a0180d7bb"
+                  },
+                  {
+                      "name":  "process.log",
+                      "bytes":  6225462,
+                      "sha256":  "b1ca70b4b9f8d63807a4cdb93746376909ea661bff01cfa766cad048951276ba"
+                  }
+              ]
 }
