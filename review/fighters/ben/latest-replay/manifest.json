@@ -1,0 +1,20 @@
+﻿{
+    "fighter":  "Ben",
+    "run":  "replay-start-right-glove-none-reject-red-blue-blue-torso",
+    "source_directory":  "C:\\Users\\joerc\\OneDrive\\Documents\\AI-Karate\\videos\\output\\ben\\replay-start-right-glove-none-reject-red-blue-blue-torso",
+    "github_path":  "review/fighters/ben/latest-replay",
+    "published_at_utc":  "2026-07-07T21:21:49.5296304Z",
+    "excludes_video":  true,
+    "files":  [
+                  {
+                      "name":  "replay_selected_events.csv",
+                      "bytes":  553443,
+                      "sha256":  "d968a246cc73603356249d4aa78099bc4d0a39dc9bebd0d2ba2a9a557bdb1ae7"
+                  },
+                  {
+                      "name":  "replay_summary.json",
+                      "bytes":  2915,
+                      "sha256":  "2ca79a768491bbb48f8dc5da270de414eb5cf02bde23cfb660301a64dd7388b7"
+                  }
+              ]
+}
