@@ -1,27 +1,27 @@
 ﻿{
     "fighter":  "Ben",
-    "run":  "rtmw-yolo26l-hybridsort-arcface-ben-start-right-redglove008-excl090-body097-switch12-lock30-roi20y20-l4",
-    "source_directory":  "C:\\Users\\joerc\\OneDrive\\Documents\\AI-Karate\\videos\\output\\ben\\rtmw-yolo26l-hybridsort-arcface-ben-start-right-redglove008-excl090-body097-switch12-lock30-roi20y20-l4",
+    "run":  "rtmw-yolo26l-hybridsort-arcface-ben-start-right-redglove008-excl090-body097-switch12-lock30-roi20y20-l4-rerun500",
+    "source_directory":  "C:\\Users\\joerc\\OneDrive\\Documents\\AI-Karate\\videos\\output\\ben\\rtmw-yolo26l-hybridsort-arcface-ben-start-right-redglove008-excl090-body097-switch12-lock30-roi20y20-l4-rerun500",
     "github_path":  "review/fighters/ben/latest",
-    "run_github_path":  "review/fighters/ben/runs/rtmw-yolo26l-hybridsort-arcface-ben-start-right-redglove008-excl090-body097-switch12-lock30-roi20y20-l4",
+    "run_github_path":  "review/fighters/ben/runs/rtmw-yolo26l-hybridsort-arcface-ben-start-right-redglove008-excl090-body097-switch12-lock30-roi20y20-l4-rerun500",
     "latest_github_path":  "review/fighters/ben/latest",
-    "published_at_utc":  "2026-07-07T18:42:41.8441355Z",
+    "published_at_utc":  "2026-07-07T21:03:43.7793005Z",
     "excludes_video":  true,
     "files":  [
                   {
                       "name":  "process.log",
-                      "bytes":  9632343,
-                      "sha256":  "55df199c1d1bb669ef59897256bc2b637e6f0576690b67e2e7c69cc1f06b42b6"
+                      "bytes":  9632992,
+                      "sha256":  "5c5db5a9eb043473712b94b01c84d20a434008c8722598140dd4bb8bffe0a360"
                   },
                   {
                       "name":  "WhatsApp Video 2026-07-05 at 8.21.39 AM_summary.json",
-                      "bytes":  6872,
-                      "sha256":  "f8de9cfa685f7d85c6192f34e7138b3d04036cc2775703e87b3b5f7a1cc3b048"
+                      "bytes":  7531,
+                      "sha256":  "c0f3ce871bc9070572766455909b5df5a81086e2c7b42f5d08a0cd05d9aed18f"
                   },
                   {
                       "name":  "WhatsApp Video 2026-07-05 at 8.21.39 AM_tracks.csv",
-                      "bytes":  34390843,
-                      "sha256":  "13859dea0a14071e0d2a8a125fb254819e76172e8eaee9fcf04735935007384a"
+                      "bytes":  34394418,
+                      "sha256":  "478609f6fc0462b9db2376d5915b8be402ab5ab9e35a831b04f6be29529da4ca"
                   }
               ]
 }
