@@ -183,6 +183,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="Keep a threshold-triggered glove-color veto active for this many frames.",
     )
+    parser.add_argument(
+        "--fighter-a-red-glove-veto-confirmation-frames",
+        default=5,
+        type=int,
+        help=(
+            "For an already confirmed fighter lock, require this many consecutive "
+            "red-glove veto frames before rejecting the locked fighter."
+        ),
+    )
     parser.add_argument("--fighter-a-min-standing-score", default=0.45, type=float)
     parser.add_argument("--experiment-label")
     parser.add_argument("--reset-to-start-side-after-missing", default=10, type=int)
@@ -1037,6 +1046,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         min_white_glove_score=args.fighter_a_min_white_glove_score,
         min_blue_glove_score=args.fighter_a_min_blue_glove_score,
         glove_reject_hold_frames=args.fighter_a_glove_reject_hold_frames,
+        red_glove_veto_confirmation_frames=args.fighter_a_red_glove_veto_confirmation_frames,
         min_standing_score=args.fighter_a_min_standing_score,
         min_reference_match_score=args.fighter_a_min_reference_match_score,
         min_face_match_score=args.fighter_a_min_face_match_score,
@@ -1063,7 +1073,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     gabriel_frames = 0
     named_counts = {"punches": 0, "fake_punches": 0, "kicks": 0}
     fieldnames = [
-        "frame", "timestamp_seconds", "track_id", "fighter_label", "confidence",
+        "frame", "timestamp_seconds", "track_id", "selected_track_id", "fighter_label", "confidence",
         "bbox", "keypoints", "red_glove_score", "white_glove_score", "blue_glove_score", "blue_torso_score", "white_uniform_score",
         "black_belt_score", "standing_score", "reference_match_score", "pose_reference_match_score",
         "competition_fighter_score",
@@ -1203,7 +1213,11 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                             reject=score.rejection_reason or "none",
                         )
                     )
-                print(f"ID confidence scores frame={frame_count}: " + " | ".join(debug_parts), flush=True)
+                print(
+                    f"ID confidence scores frame={frame_count} selected_track_id={selected_track_id}: "
+                    + " | ".join(debug_parts),
+                    flush=True,
+                )
             selected = next(
                 (candidate for candidate in tracked if candidate["track_id"] == selected_track_id),
                 None,
@@ -1293,6 +1307,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
                         "frame": frame_count,
                         "timestamp_seconds": round((frame_count - 1) / fps, 3),
                         "track_id": track_id,
+                        "selected_track_id": selected_track_id if selected_track_id is not None else "",
                         "fighter_label": label,
                         "confidence": round(candidate["confidence"], 4),
                         "bbox": json.dumps(candidate["box"]),
@@ -1409,6 +1424,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
             "min_blue_torso_score": args.fighter_a_min_blue_torso_score,
             "min_white_uniform_score": args.fighter_a_min_white_uniform_score,
             "glove_reject_hold_frames": args.fighter_a_glove_reject_hold_frames,
+            "red_glove_veto_confirmation_frames": args.fighter_a_red_glove_veto_confirmation_frames,
             "min_standing_score": args.fighter_a_min_standing_score,
             "min_reference_match_score": args.fighter_a_min_reference_match_score,
             "min_face_match_score": args.fighter_a_min_face_match_score,

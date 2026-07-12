@@ -198,6 +198,7 @@ class AnalyzeBoxmotVideoTests(unittest.TestCase):
         self.assertEqual(args.fighter_a_start, "left")
         self.assertEqual(args.fighter_a_min_white_glove_score, 0.02)
         self.assertEqual(args.fighter_a_min_blue_glove_score, 0.15)
+        self.assertEqual(args.fighter_a_red_glove_veto_confirmation_frames, 5)
         self.assertEqual(args.fighter_a_clothing_mode, "competition")
         self.assertTrue(args.fighter_a_reject_blue_torso)
         self.assertEqual(args.fighter_a_min_blue_torso_score, 0.18)

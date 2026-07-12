@@ -254,6 +254,31 @@ class FighterIdentityTests(unittest.TestCase):
         identity.observe([TrackedBox(10, 100, 0, 300, 400, white_glove_score=0.80), clean])
         self.assertNotEqual(identity.identity_scores[10].rejection_reason, "red_glove")
 
+    def test_locked_fighter_gets_red_glove_veto_grace(self) -> None:
+        identity = FighterIdentity(
+            "Gabriel",
+            "left",
+            reject_red_gloves=True,
+            min_red_glove_score=0.15,
+            confirmed_lock_min_frames=2,
+            red_glove_veto_confirmation_frames=3,
+        )
+        clean = [TrackedBox(10, 100, 0, 300, 400, red_glove_score=0.0)]
+        identity.observe(clean)
+        identity.observe(clean)
+
+        selected = identity.observe([TrackedBox(10, 100, 0, 300, 400, red_glove_score=0.20)])
+        self.assertEqual(selected, 10)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "")
+
+        selected = identity.observe([TrackedBox(10, 100, 0, 300, 400, red_glove_score=0.20)])
+        self.assertEqual(selected, 10)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "")
+
+        selected = identity.observe([TrackedBox(10, 100, 0, 300, 400, red_glove_score=0.20)])
+        self.assertIsNone(selected)
+        self.assertEqual(identity.identity_scores[10].rejection_reason, "red_glove")
+
     def test_rejects_blue_gloves_during_recovery(self) -> None:
         identity = FighterIdentity(
             "Gabriel",
