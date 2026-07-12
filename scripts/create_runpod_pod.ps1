@@ -102,6 +102,7 @@ fi
 "`$venv/bin/python" -c "import onnxruntime as ort; assert 'CUDAExecutionProvider' in ort.get_available_providers(), ort.get_available_providers(); print(f'ONNXRuntime providers: {ort.get_available_providers()}')"
 wait "`$start_pid"
 "@
+$bootstrapCommand = $bootstrapCommand -replace "`r`n", "`n"
 
 $body = @{
     name              = $podName
