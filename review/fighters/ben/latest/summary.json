@@ -1,10 +1,10 @@
 {
-  "input": "videos/input/WhatsApp Video 2026-07-05 at 8.21.39 AM.mp4",
+  "input": "videos/input/ben_input.mp4",
   "pose_backend": "rtmw",
   "model": "yolo26l-pose.pt",
   "rtm_detector_backend": "yolo",
   "tracker": "hybridsort",
-  "experiment_label": "rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-roi20y20-l4\r",
+  "experiment_label": "ben-a40-yolo26l-arcface-full",
   "fps": 29.989185717877493,
   "max_seconds": 0.0,
   "duration_seconds": 293.439,
@@ -84,6 +84,7 @@
     "min_blue_torso_score": 0.18,
     "min_white_uniform_score": 0.2,
     "glove_reject_hold_frames": 5,
+    "red_glove_veto_confirmation_frames": 5,
     "min_standing_score": 0.45,
     "min_reference_match_score": 0.05,
     "min_face_match_score": 0.25,
@@ -93,7 +94,7 @@
     "min_exclude_face_match_score": 0.45,
     "body_exclude_conflict_score": 0.93,
     "body_exclude_conflict_pose_override_score": 0.9,
-    "exclude_reference_hard_veto": true,
+    "exclude_reference_hard_veto": false,
     "exclude_veto_confirmation_frames": 4,
     "exclude_allow_strong_face_match": true,
     "reset_to_start_side_after_missing_frames": 10,
@@ -114,14 +115,14 @@
     0.8,
     0.9
   ],
-  "gabriel_frames": 6634,
+  "gabriel_frames": 6977,
   "fighter_a_track_id": 118,
   "fighter_a_track_ids": [
     1,
     27,
     32,
-    64,
-    83,
+    65,
+    82,
     92,
     99,
     103,
@@ -134,16 +135,21 @@
   "identity_resets": 11,
   "counts_by_track_id": {
     "1": {
-      "punches": 1,
+      "punches": 3,
       "fake_punches": 2,
-      "kicks": 1
+      "kicks": 2
     },
     "32": {
       "punches": 0,
       "fake_punches": 1,
       "kicks": 0
     },
-    "64": {
+    "65": {
+      "punches": 2,
+      "fake_punches": 0,
+      "kicks": 0
+    },
+    "92": {
       "punches": 1,
       "fake_punches": 0,
       "kicks": 0
@@ -156,18 +162,18 @@
     "115": {
       "punches": 0,
       "fake_punches": 1,
-      "kicks": 0
+      "kicks": 1
     }
   },
   "named_fighter_candidate_counts": {
-    "punches": 5,
+    "punches": 9,
     "fake_punches": 5,
-    "kicks": 1
+    "kicks": 3
   },
   "named_fighter_candidate_counts_per_60_seconds": {
-    "punches": 1.022,
+    "punches": 1.84,
     "fake_punches": 1.022,
-    "kicks": 0.204
+    "kicks": 0.613
   },
   "strike_counter": {
     "history_frames": 6,
@@ -211,7 +217,7 @@
     "counts_only_selected_fighter": true
   },
   "artifacts": {
-    "annotated_video": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-roi20y20-l4/WhatsApp Video 2026-07-05 at 8.21.39 AM_annotated.mp4",
-    "tracks_csv": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-roi20y20-l4/WhatsApp Video 2026-07-05 at 8.21.39 AM_tracks.csv"
+    "annotated_video": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-redveto5-roi20y20-a40/ben_input_annotated.mp4",
+    "tracks_csv": "videos/output/ben/rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-redveto5-roi20y20-a40/ben_input_tracks.csv"
   }
 }

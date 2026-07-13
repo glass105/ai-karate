@@ -1,0 +1,24 @@
+PYTHONPATH=/workspace/ai-karate /root/.venvs/ai-karate/bin/python src/analyze_boxmot_video.py \
+  --input videos/input/WhatsApp Video 2026-07-05 at 8.21.39 AM.mp4 \
+  --output-dir videos/output/ben/rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-redveto5-roi20y20-a40 \
+  --pose-backend rtmw \
+  --rtm-detector-backend yolo \
+  --model yolo26l-pose.pt \
+  --tracker hybridsort \
+  --fighter-a-name Ben \
+  --fighter-reference-root reference \
+  --fighter-a-start right \
+  --fighter-a-glove-color none \
+  --fighter-a-reject-blue-gloves \
+  --fighter-a-reject-red-gloves \
+  --fighter-a-reject-blue-torso \
+  --fighter-a-min-red-glove-score 0.08 \
+  --fighter-a-min-exclude-reference-match-score 0.90 \
+  --fighter-a-min-exclude-body-match-score 0.97 \
+  --identity-switch-confirmation-frames 12 \
+  --confirmed-lock-min-frames 30 \
+  --fighter-a-enable-face-match \
+  --face-match-backend deepface-arcface \
+  --fighter-a-reject-face-mismatch \
+  --arena-roi 0.2,0.2,0.8,0.9 \
+  --experiment-label ben-a40-yolo26l-arcface-full

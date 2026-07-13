@@ -1,29 +1,54 @@
-﻿{
-    "fighter":  "Ben",
-    "run":  "rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-roi20y20-l4",
-    "source_directory":  "C:\\Users\\joerc\\OneDrive\\Documents\\AI-Karate\\videos\\output\\ben\\rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-roi20y20-l4",
-    "github_path":  "review/fighters/ben/runs/rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-roi20y20-l4",
-    "run_github_path":  "review/fighters/ben/runs/rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-roi20y20-l4",
-    "latest_github_path":  "review/fighters/ben/latest",
-    "global_latest_github_path":  "review/latest",
-    "published_at_utc":  "2026-07-07T23:31:13Z",
-    "excludes_video":  true,
-    "video_excluded":  "WhatsApp Video 2026-07-05 at 8.21.39 AM_annotated.mp4",
-    "files":  [
-                  {
-                      "name":  "process.log",
-                      "bytes":  9480599,
-                      "sha256":  "97f776a83720d24b5c262c852a6a0e5cdbc6070e3d296a9061cc347955059ff6"
-                  },
-                  {
-                      "name":  "summary.json",
-                      "bytes":  7583,
-                      "sha256":  "1c1f5ce85166fba56bdbf4d15a4a6a50d0bcdd7a6c7029b261f66af902a0066d"
-                  },
-                  {
-                      "name":  "tracks.csv",
-                      "bytes":  34285639,
-                      "sha256":  "f2c58ad2855076c917ca88c1da0e75ca6b04ae3047fd749995225a34bfbc06c4"
-                  }
-              ]
+{
+  "fighter": "Ben",
+  "published_at_utc": "2026-07-13T00:00:29.960203+00:00",
+  "source_output_directory": "C:\\Users\\joerc\\OneDrive\\Documents\\AI-Karate\\videos\\output\\ben\\rtmw-yolo26l-hybridsort-arcface-ben-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-redveto5-roi20y20-a40",
+  "github_review_directory": "review/fighters/ben/latest",
+  "pod": {
+    "id": "wv8anljxwe00ug",
+    "gpu": "NVIDIA A40 48GB",
+    "price_per_hour_usd": 0.44
+  },
+  "run": "RTMW + YOLO26l detector + Hybrid-SORT + DeepFace ArcFace",
+  "roi": {
+    "x": [
+      0.2,
+      0.8
+    ],
+    "y": [
+      0.2,
+      0.9
+    ]
+  },
+  "flags": [
+    "--fighter-a-name Ben",
+    "--fighter-reference-root reference",
+    "--fighter-a-start right",
+    "--fighter-a-glove-color none",
+    "--fighter-a-reject-blue-gloves",
+    "--fighter-a-reject-red-gloves",
+    "--fighter-a-reject-blue-torso",
+    "--fighter-a-min-red-glove-score 0.08",
+    "--fighter-a-min-exclude-reference-match-score 0.90",
+    "--fighter-a-min-exclude-body-match-score 0.97",
+    "--identity-switch-confirmation-frames 12",
+    "--confirmed-lock-min-frames 30"
+  ],
+  "files": {
+    "process.log": {
+      "bytes": 9670174,
+      "sha256": "ff59b444888c5b3f9f5faa81e8ff90e12dacac42a49118de75b4c90f8c21474e"
+    },
+    "run_command.sh": {
+      "bytes": 1096,
+      "sha256": "6a27f8cbd0d668bb3498dcdbc1faea695c3e0cf20b88b24775727dd7de98d71c"
+    },
+    "summary.json": {
+      "bytes": 7538,
+      "sha256": "904a080f1b88198dae3cd9514ef72e1b64329e4ecb4f60a13a696167a33de31c"
+    },
+    "tracks.csv": {
+      "bytes": 34354706,
+      "sha256": "97201146837d989e95d36be7b1463aacb567c0f7abbb4a8006034e7e8066b282"
+    }
+  }
 }
