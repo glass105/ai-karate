@@ -1,21 +1,22 @@
 {
-  "input": "videos/input/Fight-1_03-21-26_SaintLeo.mp4",
+  "input": "videos/input/gabriel_input.mp4",
   "pose_backend": "rtmw",
   "model": "yolo26l-pose.pt",
   "rtm_detector_backend": "yolo",
   "tracker": "hybridsort",
-  "experiment_label": "gabriel-rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb",
+  "experiment_label": "gabriel-a4000-yolo26l-arcface-full",
   "fps": 30.0,
   "max_seconds": 0.0,
-  "duration_seconds": 179.467,
-  "frames_processed": 5384,
+  "duration_seconds": 135.5,
+  "frames_processed": 4065,
   "fighter_a_name": "Gabriel",
   "fighter_name": "Gabriel",
   "fighter_reference_root": "reference",
   "fighter_a_cues": {
-    "start_side": "left",
-    "reset_side": "left",
+    "start_side": "right",
+    "reset_side": "right",
     "white_uniform": true,
+    "clothing_mode": "competition",
     "glove_color": "none",
     "glove_positive_evidence": false,
     "glove_rejection_only": true,
@@ -30,6 +31,7 @@
     "reject_red_gloves": true,
     "reject_white_gloves": false,
     "reject_blue_gloves": true,
+    "reject_blue_torso": true,
     "require_standing": false,
     "require_competition_fighter": true,
     "reference_images": [
@@ -48,47 +50,39 @@
     ],
     "reference_image_count": 12,
     "exclude_reference_images": [
-      "reference/exclude/Screenshot 2026-06-10 113549.jpg",
-      "reference/exclude/Screenshot 2026-06-10 113613.jpg",
-      "reference/exclude/Screenshot 2026-06-10 113635.jpg",
-      "reference/exclude/Screenshot 2026-06-10 113703.jpg",
-      "reference/exclude/Screenshot 2026-06-10 113736.jpg",
-      "reference/exclude/Screenshot 2026-06-14 103500.jpg",
-      "reference/exclude/Screenshot 2026-06-14 103542.jpg",
-      "reference/exclude/Screenshot 2026-06-14 103614.jpg",
-      "reference/exclude/Screenshot 2026-06-14 103648.jpg",
-      "reference/exclude/Screenshot 2026-06-14 123608.jpg",
-      "reference/exclude/Screenshot 2026-06-14 123651.jpg",
-      "reference/exclude/Screenshot 2026-06-14 123713.jpg",
-      "reference/exclude/Screenshot 2026-06-14 124103.jpg",
-      "reference/exclude/Screenshot 2026-06-14 124202.jpg",
-      "reference/exclude/Screenshot 2026-06-14 124228.jpg",
-      "reference/exclude/Screenshot 2026-06-14 124249.jpg",
-      "reference/exclude/Screenshot 2026-06-30 154455.jpg",
-      "reference/exclude/Screenshot 2026-06-30 154513.jpg",
-      "reference/exclude/Screenshot 2026-06-30 154719.jpg",
-      "reference/exclude/Screenshot 2026-06-30 154745.jpg"
+      "reference/exclude/Screenshot 2026-07-05 141456.jpg",
+      "reference/exclude/Screenshot 2026-07-05 141520.jpg",
+      "reference/exclude/Screenshot 2026-07-05 141551.jpg",
+      "reference/exclude/Screenshot 2026-07-05 141624.jpg",
+      "reference/exclude/Screenshot 2026-07-05 141645.jpg",
+      "reference/exclude/Screenshot 2026-07-05 141711.jpg",
+      "reference/exclude/Screenshot 2026-07-05 141741.jpg",
+      "reference/exclude/Screenshot 2026-07-05 141807.jpg",
+      "reference/exclude/Screenshot 2026-07-05 141836.jpg",
+      "reference/exclude/Screenshot 2026-07-07 124651.jpg",
+      "reference/exclude/Screenshot 2026-07-07 124711.jpg",
+      "reference/exclude/Screenshot 2026-07-07 124723.jpg",
+      "reference/exclude/Screenshot 2026-07-07 145729.jpg",
+      "reference/exclude/Screenshot 2026-07-07 145851.jpg",
+      "reference/exclude/Screenshot 2026-07-07 152020.jpg",
+      "reference/exclude/Screenshot 2026-07-07 152112.jpg"
     ],
-    "exclude_reference_image_count": 20,
+    "exclude_reference_image_count": 16,
     "pose_reference_count": 24,
     "face_reference_count": 5,
-    "exclude_face_reference_count": 3,
+    "exclude_face_reference_count": 0,
     "require_reference_match": false,
     "face_match": true,
     "face_match_backend": "deepface-arcface",
     "deepface_detector_backend": "opencv",
-    "tao_reid": false,
-    "tao_reid_model": "models/tao_reid.onnx",
-    "tao_reference_count": 0,
-    "tao_exclude_reference_count": 0,
-    "min_tao_reid_match_score": 0.55,
-    "min_tao_exclude_match_score": 0.8,
-    "tao_reid_weight": 0.2,
     "reject_face_mismatch": true,
-    "min_red_glove_score": 0.15,
+    "min_red_glove_score": 0.08,
     "min_white_glove_score": 0.02,
     "min_blue_glove_score": 0.15,
+    "min_blue_torso_score": 0.18,
+    "min_white_uniform_score": 0.2,
     "glove_reject_hold_frames": 5,
+    "red_glove_veto_confirmation_frames": 5,
     "min_standing_score": 0.45,
     "min_reference_match_score": 0.05,
     "min_face_match_score": 0.25,
@@ -96,6 +90,8 @@
     "min_exclude_reference_match_score": 0.9,
     "min_exclude_body_match_score": 0.97,
     "min_exclude_face_match_score": 0.45,
+    "body_exclude_conflict_score": 0.93,
+    "body_exclude_conflict_pose_override_score": 0.9,
     "exclude_reference_hard_veto": false,
     "exclude_veto_confirmation_frames": 4,
     "exclude_allow_strong_face_match": true,
@@ -117,79 +113,42 @@
     0.8,
     0.9
   ],
-  "gabriel_frames": 4206,
-  "fighter_a_track_id": 85,
+  "gabriel_frames": 2940,
+  "fighter_a_track_id": 44,
   "fighter_a_track_ids": [
     3,
-    5,
-    28,
-    32,
-    47,
-    49,
-    58,
-    59,
-    62,
-    65,
-    85
+    19,
+    37,
+    44
   ],
-  "identity_recoveries": 13,
-  "identity_resets": 13,
+  "identity_recoveries": 3,
+  "identity_resets": 3,
   "counts_by_track_id": {
-    "5": {
-      "punches": 3,
-      "fake_punches": 2,
-      "kicks": 0
-    },
     "3": {
-      "punches": 6,
-      "fake_punches": 1,
-      "kicks": 2
-    },
-    "28": {
-      "punches": 2,
-      "fake_punches": 0,
-      "kicks": 1
-    },
-    "32": {
-      "punches": 6,
+      "punches": 7,
       "fake_punches": 3,
       "kicks": 2
     },
-    "47": {
-      "punches": 2,
-      "fake_punches": 2,
-      "kicks": 2
-    },
-    "59": {
-      "punches": 2,
-      "fake_punches": 0,
+    "19": {
+      "punches": 6,
+      "fake_punches": 5,
       "kicks": 0
     },
-    "65": {
-      "punches": 4,
-      "fake_punches": 1,
-      "kicks": 0
-    },
-    "62": {
-      "punches": 1,
-      "fake_punches": 0,
-      "kicks": 0
-    },
-    "85": {
-      "punches": 0,
-      "fake_punches": 2,
-      "kicks": 0
+    "44": {
+      "punches": 12,
+      "fake_punches": 3,
+      "kicks": 3
     }
   },
   "named_fighter_candidate_counts": {
-    "punches": 26,
+    "punches": 25,
     "fake_punches": 11,
-    "kicks": 7
+    "kicks": 5
   },
   "named_fighter_candidate_counts_per_60_seconds": {
-    "punches": 8.692,
-    "fake_punches": 3.678,
-    "kicks": 2.34
+    "punches": 11.07,
+    "fake_punches": 4.871,
+    "kicks": 2.214
   },
   "strike_counter": {
     "history_frames": 6,
@@ -233,7 +192,7 @@
     "counts_only_selected_fighter": true
   },
   "artifacts": {
-    "annotated_video": "videos/output/gabriel/rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb/Fight-1_03-21-26_SaintLeo_annotated.mp4",
-    "tracks_csv": "videos/output/gabriel/rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb/Fight-1_03-21-26_SaintLeo_tracks.csv"
+    "annotated_video": "videos/output/gabriel/rtmw-yolo26l-hybridsort-arcface-gabriel-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-roi20y20-a4000/gabriel_input_annotated.mp4",
+    "tracks_csv": "videos/output/gabriel/rtmw-yolo26l-hybridsort-arcface-gabriel-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-roi20y20-a4000/gabriel_input_tracks.csv"
   }
 }

@@ -1,34 +1,56 @@
-﻿{
-    "fighter":  "Gabriel",
-    "run":  "rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb",
-    "source_output":  "videos/output/gabriel/rtmw-yolo26l-hybridsort-arcface-roi20y20-full-32gb",
-    "github_review_folder":  "review/fighters/gabriel/latest",
-    "uploaded_to_github":  [
-                               "summary.json",
-                               "tracks.csv",
-                               "process.log",
-                               "manifest.json"
-                           ],
-    "video_excluded_from_github":  "Fight-1_03-21-26_SaintLeo_annotated.mp4",
-    "created_at":  "2026-07-03T14:12:51.6072161-04:00",
-    "runpod":  {
-                   "pod_id":  "o4scjkk6prdrrs",
-                   "gpu":  "NVIDIA A40",
-                   "gpu_vram_requirement":  "at least 32GB",
-                   "cost_per_hour":  0.44
-               },
-    "parameters":  {
-                       "fighter_a_name":  "Gabriel",
-                       "fighter_reference_root":  "reference",
-                       "fighter_a_start":  "left",
-                       "fighter_a_glove_color":  "none",
-                       "fighter_a_reject_blue_gloves":  true,
-                       "fighter_a_reject_red_gloves":  true,
-                       "roi":  "0.2,0.2,0.8,0.9",
-                       "full_video":  true,
-                       "pose_backend":  "rtmw",
-                       "detector":  "yolo26l-pose.pt",
-                       "tracker":  "hybridsort",
-                       "face_backend":  "deepface-arcface"
-                   }
+{
+  "fighter": "Gabriel",
+  "published_at_utc": "2026-07-14T03:31:36.044423+00:00",
+  "source_output_directory": "C:\\Users\\joerc\\OneDrive\\Documents\\AI-Karate\\videos\\output\\gabriel\\rtmw-yolo26l-hybridsort-arcface-gabriel-start-right-glovenone-reject-red-blue-bluetorso-excl090-body097-switch12-lock30-roi20y20-a4000",
+  "github_review_directory": "review/fighters/gabriel/latest",
+  "pod": {
+    "id": "38qw5srbxyuryb",
+    "gpu": "NVIDIA RTX A4000",
+    "price_per_hour_usd": 0.25,
+    "vcpu_count": 18,
+    "memory_gb": 53
+  },
+  "run": "RTMW + YOLO26l detector + Hybrid-SORT + DeepFace ArcFace",
+  "roi": {
+    "x": [
+      0.2,
+      0.8
+    ],
+    "y": [
+      0.2,
+      0.9
+    ]
+  },
+  "flags": [
+    "--fighter-a-name Gabriel",
+    "--fighter-reference-root reference",
+    "--fighter-a-start right",
+    "--fighter-a-glove-color none",
+    "--fighter-a-reject-blue-gloves",
+    "--fighter-a-reject-red-gloves",
+    "--fighter-a-reject-blue-torso",
+    "--fighter-a-min-red-glove-score 0.08",
+    "--fighter-a-min-exclude-reference-match-score 0.90",
+    "--fighter-a-min-exclude-body-match-score 0.97",
+    "--identity-switch-confirmation-frames 12",
+    "--confirmed-lock-min-frames 30"
+  ],
+  "files": {
+    "process.log": {
+      "bytes": 3991240,
+      "sha256": "29da65510fea8d854a0d17975508b4a2b2ab54fe96c589386cc69773936af0dc"
+    },
+    "run_command.sh": {
+      "bytes": 1097,
+      "sha256": "2b234a3f6c75a7a53b420a325f902df0c1428a111257af697ca035a6197520be"
+    },
+    "summary.json": {
+      "bytes": 7174,
+      "sha256": "4225aa88aab39dfe69994c8de5025d8a4218f3efd6b1b6b11989033a13a2bbf7"
+    },
+    "tracks.csv": {
+      "bytes": 13572278,
+      "sha256": "4b5f406812a91989ea27feb15be9d5d10462ee7b0f2601ebf3191786836f5b43"
+    }
+  }
 }
